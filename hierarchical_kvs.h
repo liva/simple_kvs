@@ -6,21 +6,27 @@
 #include <stdlib.h>
 #include <utility>
 #include <new>
+#include <memory>
 #include <assert.h>
 
 namespace HayaguiKvs
 {
-    class SimpleKvs : public Kvs
+    class HierarchicalKvs : public Kvs
     {
     public:
-        SimpleKvs()
+        HierarchicalKvs() = delete;
+        HierarchicalKvs(std::shared_ptr<Kvs> underlying_kvs) : underlying_kvs_(underlying_kvs)
         {
             for (int i = 0; i < kEntryNum; i++)
             {
                 entries_[i] = new InvalidEntry;
             }
+            if (RecoverFromUnderlyingKvs().IsError()) {
+                printf("HierarchicalKvs: failed to reconstruct from underlying kvs\n");
+                abort();
+            }
         }
-        virtual ~SimpleKvs() override
+        virtual ~HierarchicalKvs() override
         {
             for (int i = 0; i < kEntryNum; i++)
             {
@@ -44,6 +50,10 @@ namespace HayaguiKvs
         }
         virtual Status Put(WriteOptions options, ConstSlice &key, ConstSlice &value) override
         {
+            if (underlying_kvs_->Put(options, key, value).IsError())
+            {
+                return Status::CreateErrorStatus();
+            }
             for (int i = 0; i < kEntryNum; i++)
             {
                 CmpResult result;
@@ -71,6 +81,10 @@ namespace HayaguiKvs
         }
         virtual Status Delete(WriteOptions options, ConstSlice &key) override
         {
+            if (underlying_kvs_->Delete(options, key).IsError())
+            {
+                return Status::CreateErrorStatus();
+            }
             for (int i = 0; i < kEntryNum; i++)
             {
                 if (!entries_[i]->DoesKeyMatch(key))
@@ -88,8 +102,8 @@ namespace HayaguiKvs
         }
         virtual KvsEntryIterator GetIterator(ConstSlice &key) override
         {
-            SimpleKvsEntryIteratorBase *base = MemAllocator::alloc<SimpleKvsEntryIteratorBase>();
-            new (base) SimpleKvsEntryIteratorBase(*this, key);
+            HierarchicalKvsEntryIteratorBase *base = MemAllocator::alloc<HierarchicalKvsEntryIteratorBase>();
+            new (base) HierarchicalKvsEntryIteratorBase(*this, key);
             return KvsEntryIterator(base);
         }
 
@@ -101,7 +115,7 @@ namespace HayaguiKvs
             virtual Status RetrieveValue(SliceContainer &container) const = 0;
             virtual bool DoesKeyMatch(const ConstSlice &key) const = 0;
             virtual Status CmpKey(const ConstSlice &key, CmpResult &result) const = 0;
-            virtual Optional<KvsEntryIterator> GetIterator(SimpleKvs &kvs) const = 0;
+            virtual Optional<KvsEntryIterator> GetIterator(HierarchicalKvs &kvs) const = 0;
         };
         class InvalidEntry : public EntryInterface
         {
@@ -122,7 +136,7 @@ namespace HayaguiKvs
             {
                 return Status::CreateErrorStatus();
             }
-            virtual Optional<KvsEntryIterator> GetIterator(SimpleKvs &kvs) const override
+            virtual Optional<KvsEntryIterator> GetIterator(HierarchicalKvs &kvs) const override
             {
                 return Optional<KvsEntryIterator>::CreateInvalidObj(KvsEntryIterator((KvsEntryIteratorBaseInterface *)1));
             }
@@ -151,10 +165,10 @@ namespace HayaguiKvs
             {
                 return key_.Cmp(key, result);
             }
-            virtual Optional<KvsEntryIterator> GetIterator(SimpleKvs &kvs) const override
+            virtual Optional<KvsEntryIterator> GetIterator(HierarchicalKvs &kvs) const override
             {
-                SimpleKvsEntryIteratorBase *base = MemAllocator::alloc<SimpleKvsEntryIteratorBase>();
-                new (base) SimpleKvsEntryIteratorBase(kvs, key_);
+                HierarchicalKvsEntryIteratorBase *base = MemAllocator::alloc<HierarchicalKvsEntryIteratorBase>();
+                new (base) HierarchicalKvsEntryIteratorBase(kvs, key_);
                 return Optional<KvsEntryIterator>::CreateValidObj(KvsEntryIterator(base));
             }
 
@@ -162,14 +176,14 @@ namespace HayaguiKvs
             ConstSlice key_;
             ConstSlice value_;
         };
-        class SimpleKvsEntryIteratorBase : public KvsEntryIteratorBaseInterface
+        class HierarchicalKvsEntryIteratorBase : public KvsEntryIteratorBaseInterface
         {
         public:
-            SimpleKvsEntryIteratorBase() = delete;
-            SimpleKvsEntryIteratorBase(SimpleKvs &kvs, const ConstSlice &key) : kvs_(kvs), key_(key)
+            HierarchicalKvsEntryIteratorBase() = delete;
+            HierarchicalKvsEntryIteratorBase(HierarchicalKvs &kvs, const ConstSlice &key) : kvs_(kvs), key_(key)
             {
             }
-            virtual ~SimpleKvsEntryIteratorBase() override
+            virtual ~HierarchicalKvsEntryIteratorBase() override
             {
             }
             virtual bool hasNext() override
@@ -195,7 +209,7 @@ namespace HayaguiKvs
             }
             virtual void Destroy() override
             {
-                SimpleKvsEntryIteratorBase::~SimpleKvsEntryIteratorBase();
+                HierarchicalKvsEntryIteratorBase::~HierarchicalKvsEntryIteratorBase();
                 MemAllocator::free(this);
             }
             virtual Status GetKey(SliceContainer &container) override
@@ -204,7 +218,7 @@ namespace HayaguiKvs
                 return Status::CreateOkStatus();
             }
 
-            SimpleKvs &kvs_;
+            HierarchicalKvs &kvs_;
             ConstSlice key_;
         };
         KvsEntryIteratorBaseInterface *GetNextIterator(ConstSlice &key)
@@ -215,8 +229,8 @@ namespace HayaguiKvs
                 return nullptr;
             }
             ConstSlice nkey(container.CreateConstSlice());
-            SimpleKvsEntryIteratorBase *base = MemAllocator::alloc<SimpleKvsEntryIteratorBase>();
-            new (base) SimpleKvsEntryIteratorBase(*this, nkey);
+            HierarchicalKvsEntryIteratorBase *base = MemAllocator::alloc<HierarchicalKvsEntryIteratorBase>();
+            new (base) HierarchicalKvsEntryIteratorBase(*this, nkey);
             return base;
         }
         Status FindNextKey(ConstSlice &key, SliceContainer &container)
@@ -288,6 +302,34 @@ namespace HayaguiKvs
             printf("error: buffer overflow (TODO: should be fixed)\n");
             return Status::CreateErrorStatus();
         }
+        Status RecoverFromIterator(Optional<KvsEntryIterator> o_iter)
+        {
+            if (!o_iter.isPresent())
+            {
+                return Status::CreateOkStatus();
+            }
+            KvsEntryIterator iter = o_iter.get();
+            SliceContainer key_container, value_container;
+            if (iter.GetKey(key_container).IsError())
+            {
+                return Status::CreateErrorStatus();
+            }
+            if (iter.Get(ReadOptions(), value_container).IsError())
+            {
+                return Status::CreateErrorStatus();
+            }
+            ConstSlice key = key_container.CreateConstSlice();
+            ConstSlice value = value_container.CreateConstSlice();
+            if (Put(WriteOptions(), key, value).IsError())
+            {
+                return Status::CreateErrorStatus();
+            }
+            if (!iter.hasNext())
+            {
+                return Status::CreateOkStatus();
+            }
+            return RecoverFromIterator(iter.GetNext());
+        }
         void ClearEntry(int i)
         {
             delete entries_[i];
@@ -307,11 +349,20 @@ namespace HayaguiKvs
             entries_[i] = new ValidEntry(key, value);
             return Status::CreateOkStatus();
         }
+        Status RecoverFromUnderlyingKvs()
+        {
+            for (int i = 0; i < kEntryNum; i++)
+            {
+                ClearEntry(i);
+            }
+            return RecoverFromIterator(underlying_kvs_->GetFirstIterator());
+        }
         static const int kEntryNum = 1000;
         EntryInterface *entries_[kEntryNum];
+        std::shared_ptr<Kvs> underlying_kvs_;
     };
 
-    inline SimpleKvs::EntryInterface::~EntryInterface()
+    inline HierarchicalKvs::EntryInterface::~EntryInterface()
     {
     }
 }

@@ -2,6 +2,8 @@
 #include "./test.h"
 #include <assert.h>
 #include <stdlib.h>
+#include <vector>
+std::vector<int> dummy;
 
 using namespace HayaguiKvs;
 
@@ -93,7 +95,26 @@ static void cmp_substrings()
     helper_compare_valid_sliced(slice2, slice1, CmpResult(-1));
 }
 
-void slice_main()
+static void container_set()
+{
+    START_TEST;
+    SliceContainer sc;
+    ConstSlice slice("aaa", 3);
+    sc.Set(slice);
+    assert(sc.DoesMatch(slice));
+}
+
+static void container_get_validslice()
+{
+    START_TEST;
+    SliceContainer sc;
+    ConstSlice slice("abcd", 4);
+    sc.Set(slice);
+    assert(sc.IsSliceAvailable());
+    assert(sc.CreateConstSlice().DoesMatch(slice));
+}
+
+int main()
 {
     cmp_invalid_slices();
     cmp_valid_and_invalid_slice();
@@ -103,4 +124,7 @@ void slice_main()
     cmp_same_len_different_slice();
     cmp_different_len_different_slice();
     cmp_substrings();
+    container_set();
+    container_get_validslice();
+    return 0;
 }

@@ -2,6 +2,7 @@
 #ifndef assert
 #include <assert.h>
 #endif
+#include <utility>
 
 namespace HayaguiKvs
 {
@@ -13,12 +14,14 @@ namespace HayaguiKvs
         {
             value_ = obj.value_;
             checked_ = obj.checked_;
+            MarkUsedFlagToMovedObj(std::move(obj));
         }
         Status &operator=(const Status &obj) = delete;
         Status &operator=(Status &&obj)
         {
             value_ = obj.value_;
             checked_ = obj.checked_;
+            MarkUsedFlagToMovedObj(std::move(obj));
             return *this;
         }
         ~Status()
@@ -52,5 +55,9 @@ namespace HayaguiKvs
         }
         int value_;
         bool checked_ = false;
+        void MarkUsedFlagToMovedObj(Status &&obj)
+        {
+            obj.checked_ = true;
+        }
     };
 }

@@ -18,6 +18,8 @@ Assert *current_assert = nullptr;
 #include "../utils/status.h"
 #undef assert
 #include "./test.h"
+#include <vector>
+std::vector<int> dummy;
 
 using namespace HayaguiKvs;
 
@@ -51,8 +53,9 @@ static void assure_statecheck()
     assert_obj.RaiseErrorIfNotAsserted();
 }
 
-void status_main()
+int main()
 {
     check_state();
     assure_statecheck();
+    return 0;
 }

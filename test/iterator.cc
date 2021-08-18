@@ -3,7 +3,6 @@
 #include <assert.h>
 #include <memory>
 #include <utility>
-#include "../utils/debug.h"
 
 using namespace HayaguiKvs;
 struct TestKvsEntryIteratorBase final : public KvsEntryIteratorBaseInterface
@@ -179,9 +178,7 @@ static void skvs_iterator_next()
     }
     {
         KvsEntryIterator iter = kvs->GetIterator(key1);
-        DEBUG_SHOW_LINE;
         Optional<KvsEntryIterator> next_iter = iter.GetNext();
-        DEBUG_SHOW_LINE;
         assert(next_iter.isPresent());
         iter = std::move(next_iter.get());
         SliceContainer container;

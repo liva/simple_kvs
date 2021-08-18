@@ -2,7 +2,6 @@
 #include "utils/status.h"
 #include "utils/slice.h"
 #include "utils/optional.h"
-#include "utils/debug.h"
 
 namespace HayaguiKvs
 {
@@ -38,29 +37,20 @@ namespace HayaguiKvs
         KvsEntryIterator(const KvsEntryIterator &obj) = delete;
         KvsEntryIterator(KvsEntryIterator &&obj)
         {
-            DEBUG_SHOW_LINE;
             base_ = obj.base_;
-            obj.base_ = nullptr; // obj should be never used.
+            MarkUsedFlagToMovedObj(std::move(obj));
         }
         KvsEntryIterator() = delete;
         ~KvsEntryIterator()
         {
-            if (base_ && base_ != (KvsEntryIteratorBaseInterface *)1) // debug
-            {
-                base_->Destroy();
-            }
+            DestroyBase();
         }
         KvsEntryIterator &operator=(const KvsEntryIterator &obj) = delete;
         KvsEntryIterator &operator=(KvsEntryIterator &&obj)
         {
-            DEBUG_SHOW_LINE;
-            if (base_ && base_ != (KvsEntryIteratorBaseInterface *)1) // debug
-            {
-                base_->Destroy();
-            }
-            DEBUG_SHOW_LINE;
+            DestroyBase();
             base_ = obj.base_;
-            obj.base_ = nullptr; // obj should be never used.
+            MarkUsedFlagToMovedObj(std::move(obj));
             return *this;
         }
         bool hasNext()
@@ -72,17 +62,11 @@ namespace HayaguiKvs
             KvsEntryIteratorBaseInterface *next = base_->GetNext();
             if (next == nullptr)
             {
-                return Optional<KvsEntryIterator>::CreateInvalidObj(KvsEntryIterator((KvsEntryIteratorBaseInterface *)1)); // dummy
+                return Optional<KvsEntryIterator>::CreateInvalidObj(CreateDummy());
             }
             else
             {
-                auto a = Optional<KvsEntryIterator>::CreateInvalidObj(KvsEntryIterator((KvsEntryIteratorBaseInterface *)1));
-                {
-                    KvsEntryIterator iter(next);
-                    DEBUG_SHOW_LINE;
-                    a = Optional<KvsEntryIterator>::CreateValidObj(std::move(iter));
-                }
-                return a;
+                return Optional<KvsEntryIterator>::CreateValidObj(KvsEntryIterator(next));
             }
         }
         Status GetKey(SliceContainer &container)
@@ -103,6 +87,21 @@ namespace HayaguiKvs
         }
 
     private:
+        static KvsEntryIterator CreateDummy()
+        {
+            return KvsEntryIterator((KvsEntryIteratorBaseInterface *)1);
+        }
+        void DestroyBase()
+        {
+            if (base_ && base_ != (KvsEntryIteratorBaseInterface *)1)
+            {
+                base_->Destroy();
+            }
+        }
+        void MarkUsedFlagToMovedObj(KvsEntryIterator &&obj)
+        {
+            obj.base_ = nullptr;
+        }
         KvsEntryIteratorBaseInterface *base_;
     };
 

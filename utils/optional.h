@@ -1,8 +1,8 @@
 #pragma once
 #include <type_traits>
 #include <stdlib.h>
+#include <stdio.h>
 #include <utility>
-#include "./debug.h"
 
 namespace HayaguiKvs
 {
@@ -13,17 +13,16 @@ namespace HayaguiKvs
         Optional() = delete;
         ~Optional()
         {
-            DEBUG_SHOW_LINE;
         }
-        // debug
         Optional(Optional &&obj) : obj_(std::move(obj.obj_)), is_valid_(obj.is_valid_)
         {
+            MarkUsedFlagToMovedObj(std::move(obj));
         }
-        // debug
-        Optional &operator=(Optional &&obj) {
-            DEBUG_SHOW_LINE;
+        Optional &operator=(Optional &&obj)
+        {
             obj_ = std::move(obj.obj_);
             is_valid_ = obj.is_valid_;
+            MarkUsedFlagToMovedObj(std::move(obj));
             return *this;
         }
         static Optional<T> CreateValidObj(T &&obj)
@@ -39,21 +38,25 @@ namespace HayaguiKvs
             is_checked_ = true;
             return is_valid_;
         }
-        T &&get()
+        T get()
         {
             if (!is_valid_ || !is_checked_)
             {
                 printf("error: Optional::get should not be called without checking its validity");
                 abort();
             }
-            return std::move(obj_);
+            return T(std::move(obj_));
         }
 
     private:
         Optional(T &&obj, bool is_valid) : obj_(std::move(obj)), is_valid_(is_valid)
         {
         }
-        T &&obj_;
+        void MarkUsedFlagToMovedObj(Optional &&obj)
+        {
+            // no need to do
+        }
+        T obj_;
         bool is_valid_;
         bool is_checked_ = false;
     };
