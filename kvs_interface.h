@@ -85,6 +85,22 @@ namespace HayaguiKvs
         {
             return base_->Delete(options);
         }
+        void Print()
+        {
+            SliceContainer container;
+            if (base_->GetKey(container).IsError())
+            {
+                printf("(error)");
+            }
+            container.Print();
+            printf(":");
+            if (base_->Get(ReadOptions(), container).IsError())
+            {
+                printf("(error)");
+            }
+            container.Print();
+            printf("\n");
+        }
 
     private:
         static KvsEntryIterator CreateDummy()
@@ -105,14 +121,50 @@ namespace HayaguiKvs
         KvsEntryIteratorBaseInterface *base_;
     };
 
-    struct Kvs
+    class Kvs
     {
+    public:
         virtual ~Kvs() = 0;
         virtual Status Get(ReadOptions options, ConstSlice &key, SliceContainer &container) = 0;
         virtual Status Put(WriteOptions options, ConstSlice &key, ConstSlice &value) = 0;
         virtual Status Delete(WriteOptions options, ConstSlice &key) = 0;
         virtual Optional<KvsEntryIterator> GetFirstIterator() = 0;
         virtual KvsEntryIterator GetIterator(ConstSlice &key) = 0; // warning: retured iterator does not promise the existence of the key.
+        Status DeleteAll(WriteOptions options)
+        {
+            return DeleteIterRecursive(GetFirstIterator(), options);
+        }
+        void Print()
+        {
+            printf(">>>\n");
+            PrintIterRecursive(GetFirstIterator());
+            printf("<<<\n");
+        }
+
+    private:
+        void PrintIterRecursive(Optional<KvsEntryIterator> o_iter)
+        {
+            if (!o_iter.isPresent())
+            {
+                return;
+            }
+            KvsEntryIterator iter = o_iter.get();
+            iter.Print();
+            PrintIterRecursive(iter.GetNext());
+        }
+        Status DeleteIterRecursive(Optional<KvsEntryIterator> o_iter, WriteOptions options)
+        {
+            if (!o_iter.isPresent())
+            {
+                return Status::CreateOkStatus();
+            }
+            KvsEntryIterator iter = o_iter.get();
+            if (!iter.Delete(options).IsError())
+            {
+                return Status::CreateErrorStatus();
+            }
+            return DeleteIterRecursive(iter.GetNext(), options);
+        }
     };
     inline Kvs::~Kvs() {}
 }

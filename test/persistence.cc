@@ -14,11 +14,12 @@ static inline void persist_with_underlying_kvs()
     ConstSlice key1("111", 3);
     ConstSlice value1("abcde", 5);
     ConstSlice value2("defg", 4);
-    ConstSlice key3("111", 3);
+    ConstSlice key3("1001", 4);
     ConstSlice value3("xy", 2);
     ConstSlice key4("100010", 3);
     {
-        std::unique_ptr<Kvs> kvs = std::unique_ptr<Kvs>(new HierarchicalKvs(subkvs));
+        std::unique_ptr<Kvs> base_kvs = std::unique_ptr<Kvs>(new SimpleKvs);
+        std::unique_ptr<Kvs> kvs = std::unique_ptr<Kvs>(new HierarchicalKvs(std::move(base_kvs), subkvs));
         assert(kvs->Put(WriteOptions(), key1, value1).IsOk());
         assert(kvs->Put(WriteOptions(), key1, value2).IsOk());
         assert(kvs->Put(WriteOptions(), key3, value3).IsOk());
@@ -26,7 +27,8 @@ static inline void persist_with_underlying_kvs()
         assert(kvs->Delete(WriteOptions(), key4).IsOk());
     }
     {
-        std::unique_ptr<Kvs> kvs = std::unique_ptr<Kvs>(new HierarchicalKvs(subkvs));
+        std::unique_ptr<Kvs> base_kvs = std::unique_ptr<Kvs>(new SimpleKvs);
+        std::unique_ptr<Kvs> kvs = std::unique_ptr<Kvs>(new HierarchicalKvs(std::move(base_kvs), subkvs));
         SliceContainer container;
         assert(kvs->Get(ReadOptions(), key1, container).IsOk());
         assert(container.DoesMatch(value2));
@@ -39,4 +41,5 @@ static inline void persist_with_underlying_kvs()
 void persistence_main()
 {
     persist_with_underlying_kvs();
+    //recover_from_storage();
 }

@@ -1,6 +1,5 @@
 #pragma once
 #include "kvs_interface.h"
-#include "storage_interface.h"
 #include "utils/allocator.h"
 #include <stdio.h>
 #include <stdlib.h>
