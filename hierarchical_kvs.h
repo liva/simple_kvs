@@ -1,7 +1,5 @@
 #pragma once
 #include "kvs_interface.h"
-#include "simple_kvs.h"
-#include "utils/allocator.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <utility>
@@ -11,18 +9,6 @@
 
 namespace HayaguiKvs
 {
-    /*
-    typedef char correct_type;
-    typedef struct
-    {
-        char dummy[2];
-    } incorrect_type;
-
-    correct_type type_check(const volatile Kvs *);
-    incorrect_type type_check(...);
-    static_assert(sizeof(type_check((BaseKvs *)0)) == sizeof(correct_type), "BaseKvs should be derived from KVs.");
-    */
-
     class HierarchicalKvs : public Kvs
     {
     public:

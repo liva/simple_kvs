@@ -50,7 +50,7 @@ namespace HayaguiKvs
                 {
                     return ShiftEntriesForward(i, key, value);
                 }
-                if (result.IsSame())
+                if (result.IsEqual())
                 {
                     SliceContainer key_container, value_container;
                     if (PushValue(i, key, value, key_container, value_container).IsError())
@@ -123,7 +123,7 @@ namespace HayaguiKvs
             }
             virtual Optional<KvsEntryIterator> GetIterator(SimpleKvs &kvs) const override
             {
-                return Optional<KvsEntryIterator>::CreateInvalidObj(KvsEntryIterator((KvsEntryIteratorBaseInterface *)1));
+                return KvsEntryIterator::CreateInvalidObj();
             }
         };
         class ValidEntry : public EntryInterface

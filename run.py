@@ -16,6 +16,8 @@ def main():
     env.run_command("./test/a.out")
     env.build("-Wall -g3 -O2 --std=c++11 -o test/a.out test/slice.cc")
     env.run_command("./test/a.out")
+    env.build("-Wall -g3 -O2 --std=c++11 -o test/a.out test/block_storage.cc")
+    env.run_command("./test/a.out")
     env.build("-Wall -g3 -O2 --std=c++11 -o test/a.out test/main.cc test/simple_io.cc test/iterator.cc test/persistence.cc")
     env.run_command("./test/a.out")
     #shell.call("docker run --rm -it -v $PWD:$PWD -w $PWD unvme:ve /opt/nec/nosupport/llvm-ve/bin/clang++ -g3 -O2 --target=ve-linux -static --std=c++11 -o main main.cc -L/opt/nec/nosupport/llvm-ve/lib/clang/10.0.0/lib/linux -lclang_rt.builtins-ve  -lpthread -lm -lc ")

@@ -1,6 +1,5 @@
 #include "../utils/slice.h"
 #include "./test.h"
-#include <assert.h>
 #include <stdlib.h>
 #include <vector>
 std::vector<int> dummy;
@@ -51,48 +50,48 @@ static void cmp_empty_slices()
 {
     START_TEST;
     ConstSlice slice1("", 0), slice2("", 0);
-    helper_compare_valid_sliced(slice1, slice2, CmpResult(0));
-    helper_compare_valid_sliced(slice2, slice1, CmpResult(0));
+    helper_compare_valid_sliced(slice1, slice2, CmpResult::CreateSameResult());
+    helper_compare_valid_sliced(slice2, slice1, CmpResult::CreateSameResult());
 }
 
 static void cmp_empty_and_valid_slice()
 {
     START_TEST;
     ConstSlice slice1("", 0), slice2("aaa", 3);
-    helper_compare_valid_sliced(slice1, slice2, CmpResult(-1));
-    helper_compare_valid_sliced(slice2, slice1, CmpResult(1));
+    helper_compare_valid_sliced(slice1, slice2, CmpResult::CreateLowerResult());
+    helper_compare_valid_sliced(slice2, slice1, CmpResult::CreateGreaterResult());
 }
 
 static void cmp_same_valid_slice()
 {
     START_TEST;
     ConstSlice slice1("aaa", 3), slice2("aaa", 3);
-    helper_compare_valid_sliced(slice1, slice2, CmpResult(0));
-    helper_compare_valid_sliced(slice2, slice1, CmpResult(0));
+    helper_compare_valid_sliced(slice1, slice2, CmpResult::CreateSameResult());
+    helper_compare_valid_sliced(slice2, slice1, CmpResult::CreateSameResult());
 }
 
 static void cmp_same_len_different_slice()
 {
     START_TEST;
     ConstSlice slice1("aaa", 3), slice2("abc", 3);
-    helper_compare_valid_sliced(slice1, slice2, CmpResult(-1));
-    helper_compare_valid_sliced(slice2, slice1, CmpResult(1));
+    helper_compare_valid_sliced(slice1, slice2, CmpResult::CreateLowerResult());
+    helper_compare_valid_sliced(slice2, slice1, CmpResult::CreateGreaterResult());
 }
 
 static void cmp_different_len_different_slice()
 {
     START_TEST;
     ConstSlice slice1("aaaa", 4), slice2("abc", 3);
-    helper_compare_valid_sliced(slice1, slice2, CmpResult(-1));
-    helper_compare_valid_sliced(slice2, slice1, CmpResult(1));
+    helper_compare_valid_sliced(slice1, slice2, CmpResult::CreateLowerResult());
+    helper_compare_valid_sliced(slice2, slice1, CmpResult::CreateGreaterResult());
 }
 
 static void cmp_substrings()
 {
     START_TEST;
     ConstSlice slice1("abcd", 4), slice2("abc", 3);
-    helper_compare_valid_sliced(slice1, slice2, CmpResult(1));
-    helper_compare_valid_sliced(slice2, slice1, CmpResult(-1));
+    helper_compare_valid_sliced(slice1, slice2, CmpResult::CreateGreaterResult());
+    helper_compare_valid_sliced(slice2, slice1, CmpResult::CreateLowerResult());
 }
 
 static void container_set()

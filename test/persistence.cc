@@ -38,8 +38,14 @@ static inline void persist_with_underlying_kvs()
     }
 }
 
+static inline void recover_from_block_storage()
+{
+    START_TEST;
+    
+}
+
 void persistence_main()
 {
     persist_with_underlying_kvs();
-    //recover_from_storage();
+    recover_from_block_storage();
 }

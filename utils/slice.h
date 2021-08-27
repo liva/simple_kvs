@@ -1,6 +1,7 @@
 #pragma once
 #include "status.h"
 #include "allocator.h"
+#include "cmp.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -9,49 +10,6 @@
 
 namespace HayaguiKvs
 {
-    class CmpResult
-    {
-    public:
-        CmpResult() : result_(0)
-        {
-        }
-        CmpResult(const int result) : result_(result)
-        {
-        }
-        CmpResult &operator=(const CmpResult &obj)
-        {
-            result_ = obj.result_;
-            return *this;
-        }
-        bool IsLower() const
-        {
-            return result_ < 0;
-        }
-        bool IsSame() const
-        {
-            return result_ == 0;
-        }
-        bool IsGreater() const
-        {
-            return result_ > 0;
-        }
-        CmpResult CreateReversedResult() const
-        {
-            return CmpResult(result_ * -1);
-        }
-        bool IsSameResult(const CmpResult &obj) const
-        {
-            return GetNormalizedValue() == obj.GetNormalizedValue();
-        }
-
-    private:
-        int GetNormalizedValue() const
-        {
-            return result_ == 0 ? 0 : result_ / abs(result_);
-        }
-        int result_;
-    };
-
     class InvalidSlice;
     class ConstSlice;
     class SliceContainer;
