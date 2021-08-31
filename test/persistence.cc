@@ -1,5 +1,6 @@
-#include "../hierarchical_kvs.h"
-#include "../simple_kvs.h"
+#include "kvs/hierarchical_kvs.h"
+#include "kvs/simple_kvs.h"
+#include "kvs/block_storage_kvs.h"
 #include "./test.h"
 #include <assert.h>
 #include <memory>
@@ -19,7 +20,7 @@ static inline void persist_with_underlying_kvs()
     ConstSlice key4("100010", 3);
     {
         std::unique_ptr<Kvs> base_kvs = std::unique_ptr<Kvs>(new SimpleKvs);
-        std::unique_ptr<Kvs> kvs = std::unique_ptr<Kvs>(new HierarchicalKvs(std::move(base_kvs), subkvs));
+        std::unique_ptr<Kvs> kvs = std::unique_ptr<Kvs>(new HierarchicalKvs(*base_kvs, *subkvs));
         assert(kvs->Put(WriteOptions(), key1, value1).IsOk());
         assert(kvs->Put(WriteOptions(), key1, value2).IsOk());
         assert(kvs->Put(WriteOptions(), key3, value3).IsOk());
@@ -28,7 +29,7 @@ static inline void persist_with_underlying_kvs()
     }
     {
         std::unique_ptr<Kvs> base_kvs = std::unique_ptr<Kvs>(new SimpleKvs);
-        std::unique_ptr<Kvs> kvs = std::unique_ptr<Kvs>(new HierarchicalKvs(std::move(base_kvs), subkvs));
+        std::unique_ptr<Kvs> kvs = std::unique_ptr<Kvs>(new HierarchicalKvs(*base_kvs, *subkvs));
         SliceContainer container;
         assert(kvs->Get(ReadOptions(), key1, container).IsOk());
         assert(container.DoesMatch(value2));

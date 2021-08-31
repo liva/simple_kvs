@@ -1,4 +1,4 @@
-#include "../simple_kvs.h"
+#include "kvs/simple_kvs.h"
 #include "./test.h"
 #include <assert.h>
 #include <memory>

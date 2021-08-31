@@ -3,6 +3,15 @@ from scripts import *
 from datetime import datetime
 import shutil
 
+class Test:
+    def __init__(self, env, source_files):
+        self.env = env
+        self.source_files = source_files
+    def build_and_run(self):
+        self.env.build("-Wall -g3 -O2 --std=c++11 -I. -o test/a.out " + self.source_files)
+        self.env.run_command("./test/a.out")
+
+
 conf = {
     "ve": True,
     #"gdb": True,
@@ -10,16 +19,12 @@ conf = {
 def main():
     env = get_env('output', **conf)
     env.write("now: {}\n".format(datetime.now().strftime("%d/%m/%Y %H:%M:%S")))
-    env.build("-Wall -g3 -O2 --std=c++11 -o test/a.out test/optional.cc")
-    env.run_command("./test/a.out")
-    env.build("-Wall -g3 -O2 --std=c++11 -o test/a.out test/status.cc")
-    env.run_command("./test/a.out")
-    env.build("-Wall -g3 -O2 --std=c++11 -o test/a.out test/slice.cc")
-    env.run_command("./test/a.out")
-    env.build("-Wall -g3 -O2 --std=c++11 -o test/a.out test/block_storage.cc")
-    env.run_command("./test/a.out")
-    env.build("-Wall -g3 -O2 --std=c++11 -o test/a.out test/main.cc test/simple_io.cc test/iterator.cc test/persistence.cc")
-    env.run_command("./test/a.out")
+    Test(env, "test/optional.cc").build_and_run()
+    Test(env, "test/status.cc").build_and_run()
+    Test(env, "test/slice.cc").build_and_run()
+    Test(env, "test/block_storage.cc").build_and_run()
+    Test(env, "test/log.cc").build_and_run()
+    Test(env, "test/main.cc test/simple_io.cc test/iterator.cc test/persistence.cc").build_and_run()
     #shell.call("docker run --rm -it -v $PWD:$PWD -w $PWD unvme:ve /opt/nec/nosupport/llvm-ve/bin/clang++ -g3 -O2 --target=ve-linux -static --std=c++11 -o main main.cc -L/opt/nec/nosupport/llvm-ve/lib/clang/10.0.0/lib/linux -lclang_rt.builtins-ve  -lpthread -lm -lc ")
     #shell.check_call("./main")
 

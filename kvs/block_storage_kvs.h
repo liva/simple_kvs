@@ -1,7 +1,7 @@
 #pragma once
 #include "kvs_interface.h"
-#include <memory>
-#include "block_storage_interface.h"
+#include "block_storage/block_storage_interface.h"
+#include "log.h"
 
 namespace HayaguiKvs
 {
@@ -10,7 +10,7 @@ namespace HayaguiKvs
     {
     public:
         BlockStorageKvs() = delete;
-        BlockStorageKvs(std::shared_ptr<BlockStorageInterface<BlockBuffer>> underlying_storage) : underlying_storage_(underlying_storage)
+        BlockStorageKvs(BlockStorageInterface<BlockBuffer> &underlying_storage) : underlying_storage_(underlying_storage)
         {
         }
         virtual ~BlockStorageKvs()
@@ -22,6 +22,6 @@ namespace HayaguiKvs
         virtual Optional<KvsEntryIterator> GetFirstIterator() = 0;
         virtual KvsEntryIterator GetIterator(ConstSlice &key) = 0;
     private:
-        std::shared_ptr<BlockStorageInterface<BlockBuffer>> underlying_storage_;
+        BlockStorageInterface<BlockBuffer> &underlying_storage_;
     };
 }

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <utility>
+#include <new>
 
 namespace HayaguiKvs
 {
@@ -10,28 +11,53 @@ namespace HayaguiKvs
     class Optional
     {
     public:
-        Optional() = delete;
         ~Optional()
         {
+            if (is_valid_)
+            {
+                GetObjPtr()->~T();
+            }
         }
-        Optional(Optional &&obj) : obj_(std::move(obj.obj_)), is_valid_(obj.is_valid_)
+        Optional(Optional &&obj)
         {
+            is_valid_ = obj.is_valid_;
+            if (is_valid_)
+            {
+                new (GetObjPtr()) T(std::move(*obj.GetObjPtr()));
+            }
             MarkUsedFlagToMovedObj(std::move(obj));
         }
         Optional &operator=(Optional &&obj)
         {
-            obj_ = std::move(obj.obj_);
+            if (obj.is_valid_)
+            {
+                if (is_valid_)
+                {
+                    *GetObjPtr() = std::move(*obj.GetObjPtr());
+                }
+                else
+                {
+                    new (GetObjPtr()) T(std::move(*obj.GetObjPtr()));
+                }
+            }
+            else
+            {
+                if (is_valid_)
+                {
+                    GetObjPtr()->~T();
+                }
+            }
             is_valid_ = obj.is_valid_;
             MarkUsedFlagToMovedObj(std::move(obj));
             return *this;
         }
         static Optional<T> CreateValidObj(T &&obj)
         {
-            return Optional<T>(std::move(obj), true);
+            return Optional<T>(std::move(obj));
         }
-        static Optional<T> CreateInvalidObj(T &&dummy_obj)
+        static Optional<T> CreateInvalidObj()
         {
-            return Optional<T>(std::move(dummy_obj), false);
+            return Optional<T>();
         }
         bool isPresent()
         {
@@ -45,18 +71,26 @@ namespace HayaguiKvs
                 printf("error: Optional::get should not be called without checking its validity");
                 abort();
             }
-            return T(std::move(obj_));
+            return T(std::move(*GetObjPtr()));
         }
 
     private:
-        Optional(T &&obj, bool is_valid) : obj_(std::move(obj)), is_valid_(is_valid)
+        Optional() : is_valid_(false)
         {
+        }
+        Optional(T &&obj) : is_valid_(true)
+        {
+            new (GetObjPtr()) T(std::move(obj));
         }
         void MarkUsedFlagToMovedObj(Optional &&obj)
         {
-            // no need to do
+            // nothing to do
         }
-        T obj_;
+        T *GetObjPtr()
+        {
+            return reinterpret_cast<T *>(obj_);
+        }
+        uint8_t obj_[sizeof(T)] __attribute__((aligned(8)));
         bool is_valid_;
         bool is_checked_ = false;
     };

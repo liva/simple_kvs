@@ -23,23 +23,18 @@ namespace HayaguiKvs
                 delete block_buf_[i];
             }
         }
-        virtual Status Read(LogicalBlockAddress address, GenericBlockBuffer &buffer) override
+        virtual Status Open() override {
+            return Status::CreateOkStatus();
+        }
+        virtual Status ReadInternal(const LogicalBlockAddress address, GenericBlockBuffer &buffer) override
         {
-            if (!IsValidAddress(address))
-            {
-                return Status::CreateErrorStatus();
-            }
             return GetBlockFromAddress(address)->Read(buffer);
         }
-        virtual Status Write(LogicalBlockAddress address, GenericBlockBuffer &buffer) override
+        virtual Status WriteInternal(const LogicalBlockAddress address, GenericBlockBuffer &buffer) override
         {
-            if (!IsValidAddress(address))
-            {
-                return Status::CreateErrorStatus();
-            }
             return GetBlockFromAddress(address)->Write(buffer);
         }
-        virtual LogicalBlockAddress GetMaxAddress() override
+        virtual LogicalBlockAddress GetMaxAddress() const override
         {
             return LogicalBlockAddress(kNumBlocks - 1);
         }
@@ -60,14 +55,7 @@ namespace HayaguiKvs
         private:
             uint8_t buf[BlockBufferInterface::kSize];
         };
-        bool IsValidAddress(LogicalBlockAddress address)
-        {
-            CmpResult maxcheck_result, positivecheck_result;
-            GetMaxAddress().Cmp(address, maxcheck_result);
-            LogicalBlockAddress(0).Cmp(address, positivecheck_result);
-            return (maxcheck_result.IsGreaterOrEqual()) && (positivecheck_result.IsLowerOrEqual());
-        }
-        MemInternalBlock *GetBlockFromAddress(LogicalBlockAddress address)
+        MemInternalBlock *GetBlockFromAddress(const LogicalBlockAddress address)
         {
             return block_buf_[address.GetRaw()];
         }

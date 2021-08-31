@@ -37,11 +37,6 @@ namespace HayaguiKvs
         }
 
     protected:
-        PtrContainer()
-        {
-            // should be called only for an invalid object
-            base_ = nullptr;
-        }
         void DestroyBase()
         {
             if (base_)

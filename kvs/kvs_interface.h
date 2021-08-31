@@ -29,6 +29,7 @@ namespace HayaguiKvs
     class KvsEntryIterator : public PtrContainer<KvsEntryIteratorBaseInterface>
     {
     public:
+        KvsEntryIterator() = delete;
         KvsEntryIterator(KvsEntryIteratorBaseInterface *base) : PtrContainer(base)
         {
         }
@@ -51,7 +52,7 @@ namespace HayaguiKvs
             KvsEntryIteratorBaseInterface *next = base_->GetNext();
             if (next == nullptr)
             {
-                return Optional<KvsEntryIterator>::CreateInvalidObj(CreateDummy());
+                return Optional<KvsEntryIterator>::CreateInvalidObj();
             }
             else
             {
@@ -94,18 +95,10 @@ namespace HayaguiKvs
         }
         static Optional<KvsEntryIterator> CreateInvalidObj()
         {
-            return Optional<KvsEntryIterator>::CreateInvalidObj(CreateDummy());
+            return Optional<KvsEntryIterator>::CreateInvalidObj();
         }
 
     private:
-        KvsEntryIterator() : PtrContainer()
-        {
-            // should be called only for an invalid object
-        }
-        static KvsEntryIterator CreateDummy()
-        {
-            return KvsEntryIterator();
-        }
     };
 
     class Kvs

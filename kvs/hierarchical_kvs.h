@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <utility>
 #include <new>
-#include <memory>
 #include <assert.h>
 
 namespace HayaguiKvs
@@ -13,7 +12,7 @@ namespace HayaguiKvs
     {
     public:
         HierarchicalKvs() = delete;
-        HierarchicalKvs(std::unique_ptr<Kvs> base_kvs, std::shared_ptr<Kvs> underlying_kvs) : base_kvs_(std::move(base_kvs)), underlying_kvs_(underlying_kvs)
+        HierarchicalKvs(Kvs &base_kvs, Kvs &underlying_kvs) : base_kvs_(base_kvs), underlying_kvs_(underlying_kvs)
         {
             if (RecoverFromUnderlyingKvs().IsError())
             {
@@ -26,31 +25,31 @@ namespace HayaguiKvs
         }
         virtual Status Get(ReadOptions options, ConstSlice &key, SliceContainer &container) override
         {
-            return base_kvs_->Get(options, key, container);
+            return base_kvs_.Get(options, key, container);
         }
         virtual Status Put(WriteOptions options, ConstSlice &key, ConstSlice &value) override
         {
-            if (underlying_kvs_->Put(options, key, value).IsError())
+            if (underlying_kvs_.Put(options, key, value).IsError())
             {
                 return Status::CreateErrorStatus();
             }
-            return base_kvs_->Put(options, key, value);
+            return base_kvs_.Put(options, key, value);
         }
         virtual Status Delete(WriteOptions options, ConstSlice &key) override
         {
-            if (underlying_kvs_->Delete(options, key).IsError())
+            if (underlying_kvs_.Delete(options, key).IsError())
             {
                 return Status::CreateErrorStatus();
             }
-            return base_kvs_->Delete(options, key);
+            return base_kvs_.Delete(options, key);
         }
         virtual Optional<KvsEntryIterator> GetFirstIterator() override
         {
-            return base_kvs_->GetFirstIterator();
+            return base_kvs_.GetFirstIterator();
         }
         virtual KvsEntryIterator GetIterator(ConstSlice &key) override
         {
-            return base_kvs_->GetIterator(key);
+            return base_kvs_.GetIterator(key);
         }
 
     private:
@@ -84,13 +83,13 @@ namespace HayaguiKvs
         }
         Status RecoverFromUnderlyingKvs()
         {
-            if (base_kvs_->DeleteAll(WriteOptions()).IsError())
+            if (base_kvs_.DeleteAll(WriteOptions()).IsError())
             {
                 return Status::CreateErrorStatus();
             }
-            return RecoverFromIterator(underlying_kvs_->GetFirstIterator());
+            return RecoverFromIterator(underlying_kvs_.GetFirstIterator());
         }
-        std::unique_ptr<Kvs> base_kvs_;
-        std::shared_ptr<Kvs> underlying_kvs_;
+        Kvs &base_kvs_;
+        Kvs &underlying_kvs_;
     };
 }
