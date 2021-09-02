@@ -92,6 +92,68 @@ namespace HayaguiKvs
         }
         uint8_t obj_[sizeof(T)] __attribute__((aligned(8)));
         bool is_valid_;
-        bool is_checked_ = false;
+        mutable bool is_checked_ = false;
+    };
+    template <class T>
+    class OptionalForConstObj
+    {
+    public:
+        ~OptionalForConstObj()
+        {
+            if (is_valid_)
+            {
+                GetObjPtr()->~T();
+            }
+        }
+        OptionalForConstObj(const OptionalForConstObj &obj)
+        {
+            is_valid_ = obj.is_valid_;
+            if (is_valid_)
+            {
+                new (GetObjPtr()) T(*obj.GetConstObjPtr());
+            }
+        }
+        static const OptionalForConstObj<T> CreateValidObj(const T &obj)
+        {
+            return OptionalForConstObj<T>(obj);
+        }
+        static const OptionalForConstObj<T> CreateInvalidObj()
+        {
+            return OptionalForConstObj<T>();
+        }
+        bool isPresent() const
+        {
+            is_checked_ = true;
+            return is_valid_;
+        }
+        const T get() const
+        {
+            if (!is_valid_ || !is_checked_)
+            {
+                printf("error: Optional::get should not be called without checking its validity");
+                abort();
+            }
+            return T(*GetConstObjPtr());
+        }
+
+    private:
+        OptionalForConstObj() : is_valid_(false)
+        {
+        }
+        OptionalForConstObj(const T &obj) : is_valid_(true)
+        {
+            new (GetObjPtr()) T(obj);
+        }
+        const T* const GetConstObjPtr() const
+        {
+            return reinterpret_cast<const T* const>(obj_);
+        }
+        T* GetObjPtr()
+        {
+            return reinterpret_cast<T*>(obj_);
+        }
+        uint8_t obj_[sizeof(T)] __attribute__((aligned(8)));
+        bool is_valid_;
+        mutable bool is_checked_ = false;
     };
 }

@@ -23,38 +23,41 @@ namespace HayaguiKvs
                 delete block_buf_[i];
             }
         }
-        virtual Status Open() override {
+        virtual Status Open() override
+        {
             return Status::CreateOkStatus();
-        }
-        virtual Status ReadInternal(const LogicalBlockAddress address, GenericBlockBuffer &buffer) override
-        {
-            return GetBlockFromAddress(address)->Read(buffer);
-        }
-        virtual Status WriteInternal(const LogicalBlockAddress address, GenericBlockBuffer &buffer) override
-        {
-            return GetBlockFromAddress(address)->Write(buffer);
         }
         virtual LogicalBlockAddress GetMaxAddress() const override
         {
             return LogicalBlockAddress(kNumBlocks - 1);
         }
+
     private:
         class MemInternalBlock
         {
         public:
-            Status Read(GenericBlockBuffer &buffer)
+            Status Read(GenericBlockBuffer &buffer) const
             {
-                memcpy(buffer.GetPtrToTheBuffer(), buf, BlockBufferInterface::kSize);
+                buffer.CopyFrom(buf_, 0, BlockBufferInterface::kSize);
                 return Status::CreateOkStatus();
             }
-            Status Write(GenericBlockBuffer &buffer)
+            Status Write(const GenericBlockBuffer &buffer)
             {
-                memcpy(buf, buffer.GetPtrToTheBuffer(), BlockBufferInterface::kSize);
+                buffer.CopyTo(buf_, 0, BlockBufferInterface::kSize);
                 return Status::CreateOkStatus();
             }
+
         private:
-            uint8_t buf[BlockBufferInterface::kSize];
+            uint8_t buf_[BlockBufferInterface::kSize];
         };
+        virtual Status ReadInternal(const LogicalBlockAddress address, GenericBlockBuffer &buffer) override
+        {
+            return GetBlockFromAddress(address)->Read(buffer);
+        }
+        virtual Status WriteInternal(const LogicalBlockAddress address, const GenericBlockBuffer &buffer) override
+        {
+            return GetBlockFromAddress(address)->Write(buffer);
+        }
         MemInternalBlock *GetBlockFromAddress(const LogicalBlockAddress address)
         {
             return block_buf_[address.GetRaw()];

@@ -11,7 +11,7 @@
 namespace HayaguiKvs
 {
     class InvalidSlice;
-    class ConstSlice;
+    class ValidSlice;
     class SliceContainer;
     class Slice
     {
@@ -19,16 +19,17 @@ namespace HayaguiKvs
         virtual ~Slice() = 0;
         virtual bool DoesMatch(const Slice &slice) const = 0;
         virtual bool DoesMatch(const InvalidSlice &slice) const = 0;
-        virtual bool DoesMatch(const ConstSlice &slice) const = 0;
+        virtual bool DoesMatch(const ValidSlice &slice) const = 0;
         virtual bool IsValid() const = 0;
         virtual Status Cmp(const Slice &slice, CmpResult &result) const = 0;
         virtual Status Cmp(const InvalidSlice &slice, CmpResult &result) const = 0;
-        virtual Status Cmp(const ConstSlice &slice, CmpResult &result) const = 0;
+        virtual Status Cmp(const ValidSlice &slice, CmpResult &result) const = 0;
         virtual Status SetToContainer(SliceContainer &container) const = 0;
 
         virtual void Print() const = 0;
         virtual Status GetLen(int &len) const = 0;
         virtual Status CopyToBuffer(char *buf) const = 0;
+        virtual Status CopyToBufferWithRegion(char *buf, const size_t offset, const size_t len) const = 0;
     };
     inline Slice::~Slice() {}
 
@@ -49,7 +50,7 @@ namespace HayaguiKvs
         {
             return true;
         }
-        virtual bool DoesMatch(const ConstSlice &slice) const override final
+        virtual bool DoesMatch(const ValidSlice &slice) const override final
         {
             return false;
         }
@@ -67,7 +68,7 @@ namespace HayaguiKvs
         {
             return Status::CreateErrorStatus();
         }
-        virtual Status Cmp(const ConstSlice &slice, CmpResult &result) const override final
+        virtual Status Cmp(const ValidSlice &slice, CmpResult &result) const override final
         {
             return Status::CreateErrorStatus();
         }
@@ -88,13 +89,175 @@ namespace HayaguiKvs
         {
             return Status::CreateErrorStatus();
         }
+        virtual Status CopyToBufferWithRegion(char *buf, const size_t offset, const size_t len) const override final
+        {
+            return Status::CreateErrorStatus();
+        }
     };
 
-    class ConstSlice : public Slice
+    class ValidSlice : public Slice
+    {
+    public:
+        class Region
+        {
+        public:
+            Region(const ValidSlice &obj, const size_t offset, const size_t len)
+                : offset_(offset),
+                  len_(len)
+            {
+                assert(offset + len <= obj.GetLen());
+            }
+            const size_t offset_;
+            const size_t len_;
+        };
+        virtual ~ValidSlice() = 0;
+        virtual Status SetToContainer(SliceContainer &container) const override final;
+        virtual bool IsValid() const override final
+        {
+            return true;
+        }
+        virtual bool DoesMatch(const Slice &slice) const override final
+        {
+            return slice.DoesMatch(*this);
+        }
+        virtual bool DoesMatch(const InvalidSlice &slice) const override final
+        {
+            return false;
+        }
+        virtual bool DoesMatch(const ValidSlice &slice) const override final
+        {
+            if (slice.GetLen() != GetLen())
+            {
+                return false;
+            }
+            CmpResult result;
+            if (Cmp(slice, result).IsError())
+            {
+                return false;
+            }
+            return result.IsEqual();
+        }
+        virtual Status Cmp(const Slice &slice, CmpResult &result) const override final
+        {
+            Status s = slice.Cmp(*this, result);
+            result = result.CreateReversedResult();
+            return s;
+        }
+        virtual Status Cmp(const InvalidSlice &slice, CmpResult &result) const override final
+        {
+            return Status::CreateErrorStatus();
+        }
+        virtual Status Cmp(const ValidSlice &slice, CmpResult &result) const override final
+        {
+            return CmpWithRegion(slice, Region(*this, 0, GetLen()), result);
+        }
+        virtual Status GetLen(int &len) const override final
+        {
+            len = GetLen();
+            return Status::CreateOkStatus();
+        }
+        virtual Status CopyToBuffer(char *buf) const override final
+        {
+            return CopyToBufferWithRegion(buf, Region(*this, 0, GetLen()));
+        }
+        virtual Status CopyToBufferWithRegion(char *buf, const size_t offset, const size_t len) const override final
+        {
+            if (offset + len > GetLen()) {
+                return Status::CreateErrorStatus();
+            }
+            return CopyToBufferWithRegion(buf, Region(*this, offset, len));
+        }
+        virtual void Print() const override final
+        {
+            PrintWithRegion(Region(*this, 0, GetLen()));
+        }
+        virtual int GetLen() const = 0;
+
+    protected:
+        friend class ShrinkedSlice;
+        friend class ConstSlice;
+        // TODO: in principle, its possible to remove this method, but we don't have such time.
+        // It's still better than before where clients call GetRawPtr() without hesitation.
+        // Now, only Slice-related classes call this.
+        virtual const char *const GetRawPtr() const = 0;
+
+        virtual Status CopyToBufferWithRegion(char *buf, const Region region) const = 0;
+        virtual Status CmpWithRegion(const ValidSlice &slice, const Region region, CmpResult &result) const = 0;
+        virtual void PrintWithRegion(const Region region) const = 0;
+    };
+    inline ValidSlice::~ValidSlice() {}
+
+    class ConstSlice;
+
+    class ShrinkedSlice : public ValidSlice
+    {
+    public:
+        ShrinkedSlice(const ConstSlice &slice, const size_t offset, const size_t len)
+            : underlying_slice_((const ValidSlice &)slice),
+              offset_(offset),
+              len_(len)
+        {
+            assert(offset + len <= underlying_slice_.GetLen());
+        }
+        ShrinkedSlice(const ShrinkedSlice &slice, const size_t offset, const size_t len)
+            : underlying_slice_((const ValidSlice &)slice),
+              offset_(offset),
+              len_(len)
+        {
+            assert(offset + len <= underlying_slice_.GetLen());
+        }
+        ShrinkedSlice(const ValidSlice &slice, const size_t offset, const size_t len)
+            : underlying_slice_(slice),
+              offset_(offset),
+              len_(len)
+        {
+            assert(offset + len <= underlying_slice_.GetLen());
+        }
+        virtual ~ShrinkedSlice()
+        {
+        }
+        virtual void PrintWithRegion(const Region region) const override final
+        {
+            underlying_slice_.PrintWithRegion(CreateRegionForUnderlyingSlice(region));
+        }
+        virtual int GetLen() const override final
+        {
+            return len_;
+        }
+        virtual Status CopyToBufferWithRegion(char *buf, const Region region) const override final
+        {
+            return underlying_slice_.CopyToBufferWithRegion(buf, CreateRegionForUnderlyingSlice(region));
+        }
+        virtual Status CmpWithRegion(const ValidSlice &slice, const Region region, CmpResult &result) const override final
+        {
+            return underlying_slice_.CmpWithRegion(slice, CreateRegionForUnderlyingSlice(region), result);
+        }
+        virtual const char *const GetRawPtr() const override final
+        {
+            return underlying_slice_.GetRawPtr() + offset_;
+        }
+
+    private:
+        const Region CreateRegionForUnderlyingSlice(const Region region) const
+        {
+            return Region(underlying_slice_, offset_ + region.offset_, region.len_);
+        }
+        const ValidSlice &underlying_slice_;
+        const size_t offset_;
+        const size_t len_;
+    };
+
+    class ConstSlice : public ValidSlice
     {
     public:
         ConstSlice() = delete;
-        ConstSlice(const ConstSlice &slice) : buf_(DuplicateBuffer(slice.buf_, slice.len_)), len_(slice.len_)
+        ConstSlice(const ConstSlice &slice) : buf_(DuplicateBuffer(slice.GetRawPtr(), slice.GetLen())), len_(slice.GetLen())
+        {
+        }
+        ConstSlice(const ShrinkedSlice &slice) : buf_(DuplicateBuffer(slice.GetRawPtr(), slice.GetLen())), len_(slice.GetLen())
+        {
+        }
+        ConstSlice(const ValidSlice &slice) : buf_(DuplicateBuffer(slice.GetRawPtr(), slice.GetLen())), len_(slice.GetLen())
         {
         }
         ConstSlice(const char *const buf, const int len) : buf_(DuplicateBuffer(buf, len)), len_(len)
@@ -107,52 +270,43 @@ namespace HayaguiKvs
         {
             MemAllocator::free(const_cast<char *>(buf_));
         }
-        virtual bool DoesMatch(const Slice &slice) const override final
+        virtual void PrintWithRegion(const Region region) const override final
         {
-            return slice.DoesMatch(*this);
-        }
-        virtual bool DoesMatch(const InvalidSlice &slice) const override final
-        {
-            return false;
-        }
-        virtual bool DoesMatch(const ConstSlice &slice) const override final
-        {
-            if (slice.len_ != len_)
+            for (int i = region.offset_; i < region.len_; i++)
             {
-                return false;
+                printf("%c", buf_[i]);
             }
-            return memcmp(slice.buf_, buf_, len_) == 0;
+            fflush(stdout);
         }
-        virtual Status Cmp(const Slice &slice, CmpResult &result) const override final
+        virtual int GetLen() const override
         {
-            Status s = slice.Cmp(*this, result);
-            result = result.CreateReversedResult();
-            return s;
+            return len_;
         }
-        virtual Status Cmp(const InvalidSlice &slice, CmpResult &result) const override final
+        virtual Status CopyToBufferWithRegion(char *buf, const Region region) const override final
         {
-            return Status::CreateErrorStatus();
+            memcpy(buf, buf_ + region.offset_, region.len_);
+            return Status::CreateOkStatus();
         }
-        virtual Status Cmp(const ConstSlice &slice, CmpResult &result) const override final
+        virtual Status CmpWithRegion(const ValidSlice &slice, const Region region, CmpResult &result) const override final
         {
-            int len;
             int result_for_substring_case;
-            if (slice.len_ > len_)
+            size_t cmp_len;
+            if (slice.GetLen() > region.len_)
             {
-                len = len_;
+                cmp_len = region.len_;
                 result_for_substring_case = -1;
             }
-            else if (slice.len_ < len_)
+            else if (slice.GetLen() < region.len_)
             {
-                len = slice.len_;
+                cmp_len = slice.GetLen();
                 result_for_substring_case = 1;
             }
             else
             {
-                len = len_;
+                cmp_len = region.len_;
                 result_for_substring_case = 0;
             }
-            int memcmp_result = memcmp(buf_, slice.buf_, len);
+            int memcmp_result = memcmp(buf_ + region.offset_, slice.GetRawPtr(), cmp_len);
             if (memcmp_result == 0)
             {
                 result = CmpResult(result_for_substring_case);
@@ -163,28 +317,9 @@ namespace HayaguiKvs
             }
             return Status::CreateOkStatus();
         }
-        virtual bool IsValid() const override final
+        virtual const char *const GetRawPtr() const override final
         {
-            return true;
-        }
-        virtual Status SetToContainer(SliceContainer &container) const override final;
-        virtual void Print() const override final
-        {
-            for (int i = 0; i < len_; i++)
-            {
-                printf("%c", buf_[i]);
-            }
-            fflush(stdout);
-        }
-        virtual Status GetLen(int &len) const override final
-        {
-            len = len_;
-            return Status::CreateOkStatus();
-        }
-        virtual Status CopyToBuffer(char *buf) const override final
-        {
-            memcpy(buf, buf_, len_);
-            return Status::CreateOkStatus();
+            return buf_;
         }
 
     private:
@@ -216,7 +351,7 @@ namespace HayaguiKvs
         {
             return slice->SetToContainer(*this);
         }
-        void Set(const ConstSlice &slice)
+        void Set(const ValidSlice &slice)
         {
             Release();
             slice_ = new (MemAllocator::alloc<ConstSlice>()) ConstSlice(slice);
@@ -269,7 +404,8 @@ namespace HayaguiKvs
         }
         Status GetLen(int &len) const
         {
-            return slice_->GetLen(len);
+            len = slice_->GetLen();
+            return Status::CreateOkStatus();
         }
         Status CopyToBuffer(char *buf) const
         {
@@ -297,7 +433,7 @@ namespace HayaguiKvs
         ConstSlice *slice_;
     };
 
-    inline Status ConstSlice::SetToContainer(SliceContainer &container) const
+    inline Status ValidSlice::SetToContainer(SliceContainer &container) const
     {
         container.Set(*this);
         return Status::CreateOkStatus();

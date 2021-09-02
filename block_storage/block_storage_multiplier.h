@@ -71,7 +71,7 @@ namespace HayaguiKvs
             {
                 return blockstorage_.Read(region_.GetStart() + address, buffer);
             }
-            virtual Status WriteInternal(const LogicalBlockAddress address, BlockBuffer &buffer) override
+            virtual Status WriteInternal(const LogicalBlockAddress address, const BlockBuffer &buffer) override
             {
                 return blockstorage_.Write(region_.GetStart() + address, buffer);
             }

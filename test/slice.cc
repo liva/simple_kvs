@@ -94,6 +94,16 @@ static void cmp_substrings()
     helper_compare_valid_sliced(slice2, slice1, CmpResult::CreateLowerResult());
 }
 
+static void shrinked_slice() {
+    START_TEST;
+    ConstSlice slice1("abcde", 5), slice2("xybcd", 5);
+    ShrinkedSlice shrinked_slice1(slice1, 1, 3);
+    ShrinkedSlice shrinked_slice2(slice2, 2, 3);
+    ShrinkedSlice shrinked_slice3(slice1, 1, 4);
+    helper_compare_valid_sliced(shrinked_slice1, shrinked_slice2, CmpResult::CreateSameResult());
+    helper_compare_valid_sliced(shrinked_slice3, shrinked_slice2, CmpResult::CreateGreaterResult());
+}
+
 static void container_set()
 {
     START_TEST;
@@ -123,6 +133,7 @@ int main()
     cmp_same_len_different_slice();
     cmp_different_len_different_slice();
     cmp_substrings();
+    shrinked_slice();
     container_set();
     container_get_validslice();
     return 0;

@@ -1,7 +1,6 @@
 #include "appendonly_storage.h"
 #include "block_storage/memblock_storage.h"
 #include "./test.h"
-#include "../utils/debug.h"
 #include <memory>
 #include <vector>
 std::vector<int> dummy;
@@ -26,18 +25,18 @@ static void append_only_storage()
     assert(append_only_storage.Open().IsOk());
     for (char c = 'A'; c <= 'Z'; c++)
     {
-        int cnt = 'Z' - c;
+        int cnt = ('Z' - c) * 10;
         ConstSlice slice = CreateSliceFromChar(c, cnt);
         size_t prev_len = append_only_storage.GetLen();
         assert(append_only_storage.Append(slice).IsOk());
         assert(append_only_storage.GetLen() == prev_len + cnt);
     }
-    SequentialReadStorageOverRandomReadStorage sequential_read_storage(append_only_storage);
+    SequentialReadCharStorageOverRandomReadCharStorage sequential_read_storage(append_only_storage);
+    assert(sequential_read_storage.Open().IsOk());
     for (char c = 'A'; c <= 'Z'; c++)
     {
-        int cnt = 'Z' - c;
+        int cnt = ('Z' - c) * 10;
         SliceContainer container;
-        assert(sequential_read_storage.Open().IsOk());
         assert(sequential_read_storage.Read(container, cnt).IsOk());
         int read_len;
         assert(container.GetLen(read_len).IsOk());
