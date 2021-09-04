@@ -1,6 +1,7 @@
 #pragma once
 #include "kvs_interface.h"
 #include "block_storage/block_storage_interface.h"
+#include "kvs/simple_kvs.h"
 #include "log.h"
 #include "appendonly_storage.h"
 
@@ -11,31 +12,31 @@ namespace HayaguiKvs
     {
     public:
         BlockStorageKvs() = delete;
-        BlockStorageKvs(BlockStorageInterface<BlockBuffer> &underlying_storage)
+        BlockStorageKvs(BlockStorageInterface<BlockBuffer> &underlying_storage, Kvs &cache_kvs)
             : underlying_storage_(underlying_storage),
               char_storage_(underlying_storage),
-              log_(char_storage_)
+              log_(char_storage_),
+              cache_kvs_(cache_kvs)
         {
-            if (RecoverFromUnderlyingStorage().IsError())
-            {
-                abort();
-            }
             if (log_.Open().IsError())
             {
                 abort();
             }
+            RecoverFromStorage();
         }
         virtual ~BlockStorageKvs()
         {
         }
-        virtual Status Get(ReadOptions options, ConstSlice &key, SliceContainer &container) override
+        virtual Status Get(ReadOptions options, const ConstSlice &key, SliceContainer &container) override
         {
-            // This is not prefarable.
-            // should split Kvs Interface between ReadableKvs and WritableKvs
-            abort();
+            return cache_kvs_.Get(options, key, container);
         }
-        virtual Status Put(WriteOptions options, ConstSlice &key, ConstSlice &value) override
+        virtual Status Put(WriteOptions options, const ConstSlice &key, const ConstSlice &value) override
         {
+            if (Signature::StorePutSignature(log_).IsError())
+            {
+                return Status::CreateErrorStatus();
+            }
             if (log_.AppendEntry(key).IsError())
             {
                 return Status::CreateErrorStatus();
@@ -44,24 +45,130 @@ namespace HayaguiKvs
             {
                 return Status::CreateErrorStatus();
             }
+            return cache_kvs_.Put(options, key, value);
         }
-        virtual Status Delete(WriteOptions options, ConstSlice &key) override
+        virtual Status Delete(WriteOptions options, const ConstSlice &key) override
         {
+            if (Signature::StorePutSignature(log_).IsError())
+            {
+                return Status::CreateErrorStatus();
+            }
+            if (log_.AppendEntry(key).IsError())
+            {
+                return Status::CreateErrorStatus();
+            }
+            return cache_kvs_.Delete(options, key);
         }
         virtual Optional<KvsEntryIterator> GetFirstIterator() override
         {
+            Optional<KvsEntryIterator> cache_iter = cache_kvs_.GetFirstIterator();
+            if (!cache_iter.isPresent()) {
+                return Optional<KvsEntryIterator>::CreateInvalidObj();
+            }
+            SliceContainer key_container;
+            assert(cache_iter.get().GetKey(key_container).IsOk());
+            return Optional<KvsEntryIterator>::CreateValidObj(GetIterator(key_container.CreateConstSlice()));
         }
-        virtual KvsEntryIterator GetIterator(ConstSlice &key) override
+        virtual KvsEntryIterator GetIterator(const ConstSlice &key) override
         {
+            GenericKvsEntryIteratorBase *base = MemAllocator::alloc<GenericKvsEntryIteratorBase>();
+            new (base) GenericKvsEntryIteratorBase(*this, key);
+            return KvsEntryIterator(base);
+        }
+        virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) override {
+            return cache_kvs_.FindNextKey(key, container);
         }
 
     private:
-        Status RecoverFromUnderlyingStorage()
+        void RecoverFromStorage()
         {
+            SequentialReadCharStorageOverRandomReadCharStorage seqread_char_storage(char_storage_);
+            LogReader log(seqread_char_storage);
+            if (log.Open().IsError())
+            {
+                return;
+            }
+            while (true)
+            {
+                uint8_t signature;
+                if (Signature::RetrieveSignature(log, signature).IsError())
+                {
+                    cache_kvs_.Print(); // debug
+                    return;
+                }
+                if (signature == Signature::kSignaturePut)
+                {
+                    SliceContainer key_container, value_container;
+                    if (RetrievePutItem(log, key_container, value_container).IsError())
+                    {
+                        abort();
+                    }
+                    if (cache_kvs_.Put(WriteOptions(), key_container.CreateConstSlice(), value_container.CreateConstSlice()).IsError()) {
+                        abort();
+                    }
+                }
+                else if (signature == Signature::kSignatureDelete)
+                {
+                    SliceContainer key_container;
+                    if (RetrieveDeletedItem(log, key_container).IsError())
+                    {
+                        abort();
+                    }
+                    if (cache_kvs_.Delete(WriteOptions(), key_container.CreateConstSlice()).IsError()) {
+                        abort();
+                    }
+                }
+                else
+                {
+                    abort();
+                }
+            }
+        }
+        Status RetrievePutItem(LogReader &log, SliceContainer &key_container, SliceContainer &value_container)
+        {
+            if (log.RetrieveNextEntry(key_container).IsError())
+            {
+                return Status::CreateErrorStatus();
+            }
+            return log.RetrieveNextEntry(value_container);
+        }
+        Status RetrieveDeletedItem(LogReader &log, SliceContainer &key_container)
+        {
+            return log.RetrieveNextEntry(key_container);
         }
 
         BlockStorageInterface<BlockBuffer> &underlying_storage_;
         AppendOnlyCharStorage<BlockBuffer> char_storage_;
-        AppendOnlyLog<BlockBuffer> log_;
+        LogAppender<BlockBuffer> log_;
+        Kvs &cache_kvs_;
+
+        class Signature
+        {
+        public:
+            static Status StorePutSignature(LogAppender<BlockBuffer> &log)
+            {
+                ConstSlice signature((const char *)&kSignaturePut, 1);
+                return log.AppendEntry(signature);
+            }
+            static Status RetrieveSignature(LogReader &log, uint8_t &signature)
+            {
+                SliceContainer signature_container;
+                if (log.RetrieveNextEntry(signature_container).IsError())
+                {
+                    return Status::CreateErrorStatus();
+                }
+                int len;
+                if (signature_container.GetLen(len).IsError()) {
+                    return Status::CreateErrorStatus();
+                }
+                if (len != 1)
+                {
+                    return Status::CreateErrorStatus();
+                }
+                return signature_container.CopyToBuffer((char *)&signature);
+            }
+            static const uint8_t kSignaturePut = 0;
+            static const uint8_t kSignatureDelete = 1;
+        };
     };
 }

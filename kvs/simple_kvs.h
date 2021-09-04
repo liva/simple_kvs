@@ -26,7 +26,7 @@ namespace HayaguiKvs
                 delete entries_[i];
             }
         }
-        virtual Status Get(ReadOptions options, ConstSlice &key, SliceContainer &container) override
+        virtual Status Get(ReadOptions options, const ConstSlice &key, SliceContainer &container) override
         {
             for (int i = 0; i < kEntryNum; i++)
             {
@@ -41,7 +41,7 @@ namespace HayaguiKvs
             }
             return Status::CreateErrorStatus();
         }
-        virtual Status Put(WriteOptions options, ConstSlice &key, ConstSlice &value) override
+        virtual Status Put(WriteOptions options, const ConstSlice &key, const ConstSlice &value) override
         {
             for (int i = 0; i < kEntryNum; i++)
             {
@@ -68,7 +68,7 @@ namespace HayaguiKvs
             printf("error: buffer overflow (TODO: should be fixed)\n");
             return Status::CreateErrorStatus();
         }
-        virtual Status Delete(WriteOptions options, ConstSlice &key) override
+        virtual Status Delete(WriteOptions options, const ConstSlice &key) override
         {
             for (int i = 0; i < kEntryNum; i++)
             {
@@ -85,11 +85,27 @@ namespace HayaguiKvs
         {
             return entries_[0]->GetIterator(*this);
         }
-        virtual KvsEntryIterator GetIterator(ConstSlice &key) override
+        virtual KvsEntryIterator GetIterator(const ConstSlice &key) override
         {
-            SimpleKvsEntryIteratorBase *base = MemAllocator::alloc<SimpleKvsEntryIteratorBase>();
-            new (base) SimpleKvsEntryIteratorBase(*this, key);
+            GenericKvsEntryIteratorBase *base = MemAllocator::alloc<GenericKvsEntryIteratorBase>();
+            new (base) GenericKvsEntryIteratorBase(*this, key);
             return KvsEntryIterator(base);
+        }
+        virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) override
+        {
+            for (int i = 0; i < kEntryNum; i++)
+            {
+                CmpResult result;
+                if (entries_[i]->CmpKey(key, result).IsError())
+                {
+                    return Status::CreateErrorStatus();
+                }
+                if (result.IsGreater())
+                {
+                    return entries_[i]->RetrieveKey(container);
+                }
+            }
+            return Status::CreateErrorStatus();
         }
 
     private:
@@ -152,8 +168,8 @@ namespace HayaguiKvs
             }
             virtual Optional<KvsEntryIterator> GetIterator(SimpleKvs &kvs) const override
             {
-                SimpleKvsEntryIteratorBase *base = MemAllocator::alloc<SimpleKvsEntryIteratorBase>();
-                new (base) SimpleKvsEntryIteratorBase(kvs, key_);
+                GenericKvsEntryIteratorBase *base = MemAllocator::alloc<GenericKvsEntryIteratorBase>();
+                new (base) GenericKvsEntryIteratorBase(kvs, key_);
                 return Optional<KvsEntryIterator>::CreateValidObj(KvsEntryIterator(base));
             }
 
@@ -161,80 +177,7 @@ namespace HayaguiKvs
             ConstSlice key_;
             ConstSlice value_;
         };
-        class SimpleKvsEntryIteratorBase : public KvsEntryIteratorBaseInterface
-        {
-        public:
-            SimpleKvsEntryIteratorBase() = delete;
-            SimpleKvsEntryIteratorBase(SimpleKvs &kvs, const ConstSlice &key) : kvs_(kvs), key_(key)
-            {
-            }
-            virtual ~SimpleKvsEntryIteratorBase() override
-            {
-            }
-            virtual bool hasNext() override
-            {
-                SliceContainer container;
-                return kvs_.FindNextKey(key_, container).IsOk();
-            }
-            virtual KvsEntryIteratorBaseInterface *GetNext() override
-            {
-                return kvs_.GetNextIterator(key_);
-            }
-            virtual Status Get(ReadOptions options, SliceContainer &container) override
-            {
-                return kvs_.Get(options, key_, container);
-            }
-            virtual Status Put(WriteOptions options, ConstSlice &value) override
-            {
-                return kvs_.Put(options, key_, value);
-            }
-            virtual Status Delete(WriteOptions options) override
-            {
-                return kvs_.Delete(options, key_);
-            }
-            virtual void Destroy() override
-            {
-                SimpleKvsEntryIteratorBase::~SimpleKvsEntryIteratorBase();
-                MemAllocator::free(this);
-            }
-            virtual Status GetKey(SliceContainer &container) override
-            {
-                container.Set(key_);
-                return Status::CreateOkStatus();
-            }
-
-            SimpleKvs &kvs_;
-            ConstSlice key_;
-        };
-        KvsEntryIteratorBaseInterface *GetNextIterator(ConstSlice &key)
-        {
-            SliceContainer container;
-            if (FindNextKey(key, container).IsError())
-            {
-                return nullptr;
-            }
-            ConstSlice nkey(container.CreateConstSlice());
-            SimpleKvsEntryIteratorBase *base = MemAllocator::alloc<SimpleKvsEntryIteratorBase>();
-            new (base) SimpleKvsEntryIteratorBase(*this, nkey);
-            return base;
-        }
-        Status FindNextKey(ConstSlice &key, SliceContainer &container)
-        {
-            for (int i = 0; i < kEntryNum; i++)
-            {
-                CmpResult result;
-                if (entries_[i]->CmpKey(key, result).IsError())
-                {
-                    return Status::CreateErrorStatus();
-                }
-                if (result.IsGreater())
-                {
-                    return entries_[i]->RetrieveKey(container);
-                }
-            }
-            return Status::CreateErrorStatus();
-        }
-        Status ShiftEntriesForward(const int start_index, ConstSlice &key, ConstSlice &value)
+        Status ShiftEntriesForward(const int start_index, const ConstSlice &key, const ConstSlice &value)
         {
             SliceContainer key_container, value_container;
             key_container.Set(key);

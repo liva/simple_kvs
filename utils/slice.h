@@ -394,7 +394,7 @@ namespace HayaguiKvs
         {
             return slice_->Cmp(slice, result);
         }
-        Status Cmp(const ConstSlice &slice, CmpResult &result) const
+        Status Cmp(const ValidSlice &slice, CmpResult &result) const
         {
             return slice_->Cmp(slice, result);
         }

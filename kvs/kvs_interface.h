@@ -105,11 +105,12 @@ namespace HayaguiKvs
     {
     public:
         virtual ~Kvs() = 0;
-        virtual Status Get(ReadOptions options, ConstSlice &key, SliceContainer &container) = 0;
-        virtual Status Put(WriteOptions options, ConstSlice &key, ConstSlice &value) = 0;
-        virtual Status Delete(WriteOptions options, ConstSlice &key) = 0;
+        virtual Status Get(ReadOptions options, const ConstSlice &key, SliceContainer &container) = 0;
+        virtual Status Put(WriteOptions options, const ConstSlice &key, const ConstSlice &value) = 0;
+        virtual Status Delete(WriteOptions options, const ConstSlice &key) = 0;
         virtual Optional<KvsEntryIterator> GetFirstIterator() = 0;
-        virtual KvsEntryIterator GetIterator(ConstSlice &key) = 0; // warning: retured iterator does not promise the existence of the key.
+        virtual KvsEntryIterator GetIterator(const ConstSlice &key) = 0; // warning: retured iterator does not promise the existence of the key.
+        virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) = 0;
         Status DeleteAll(WriteOptions options)
         {
             return DeleteIterRecursive(GetFirstIterator(), options);
@@ -147,4 +148,58 @@ namespace HayaguiKvs
         }
     };
     inline Kvs::~Kvs() {}
+    
+    class GenericKvsEntryIteratorBase : public KvsEntryIteratorBaseInterface
+    {
+    public:
+        GenericKvsEntryIteratorBase() = delete;
+        GenericKvsEntryIteratorBase(Kvs &kvs, const ConstSlice &key) : kvs_(kvs), key_(key)
+        {
+        }
+        virtual ~GenericKvsEntryIteratorBase() override
+        {
+        }
+        virtual bool hasNext() override
+        {
+            SliceContainer container;
+            return kvs_.FindNextKey(key_, container).IsOk();
+        }
+        virtual KvsEntryIteratorBaseInterface *GetNext() override
+        {
+            SliceContainer container;
+            if (kvs_.FindNextKey(key_, container).IsError())
+            {
+                return nullptr;
+            }
+            ConstSlice nkey(container.CreateConstSlice());
+            GenericKvsEntryIteratorBase *base = MemAllocator::alloc<GenericKvsEntryIteratorBase>();
+            new (base) GenericKvsEntryIteratorBase(kvs_, nkey);
+            return base;
+        }
+        virtual Status Get(ReadOptions options, SliceContainer &container) override
+        {
+            return kvs_.Get(options, key_, container);
+        }
+        virtual Status Put(WriteOptions options, ConstSlice &value) override
+        {
+            return kvs_.Put(options, key_, value);
+        }
+        virtual Status Delete(WriteOptions options) override
+        {
+            return kvs_.Delete(options, key_);
+        }
+        virtual void Destroy() override
+        {
+            GenericKvsEntryIteratorBase::~GenericKvsEntryIteratorBase();
+            MemAllocator::free(this);
+        }
+        virtual Status GetKey(SliceContainer &container) override
+        {
+            container.Set(key_);
+            return Status::CreateOkStatus();
+        }
+
+        Kvs &kvs_;
+        ConstSlice key_;
+    };
 }

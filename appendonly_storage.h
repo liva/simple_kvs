@@ -143,7 +143,7 @@ namespace HayaguiKvs
     AppendCharStorageInterface::~AppendCharStorageInterface() {}
 
     template <class BlockBuffer>
-    class AppendOnlyCharStorage : public RandomReadCharStorageInterface, AppendCharStorageInterface
+    class AppendOnlyCharStorage : public RandomReadCharStorageInterface, public AppendCharStorageInterface
     {
     public:
         AppendOnlyCharStorage(BlockStorageInterface<BlockBuffer> &blockstorage)

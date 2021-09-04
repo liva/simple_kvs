@@ -35,10 +35,10 @@ namespace HayaguiKvs
 
         const uint64_t value_;
     };
-    class ReadOnlyLog
+    class LogReader
     {
     public:
-        ReadOnlyLog(SequentialReadCharStorageInterface &char_storage)
+        LogReader(SequentialReadCharStorageInterface &char_storage)
             : char_storage_(char_storage)
         {
         }
@@ -61,10 +61,10 @@ namespace HayaguiKvs
     };
 
     template <class BlockBuffer>
-    class AppendOnlyLog
+    class LogAppender
     {
     public:
-        AppendOnlyLog(AppendCharStorageInterface &char_storage)
+        LogAppender(AppendCharStorageInterface &char_storage)
             : char_storage_(char_storage)
         {
         }
@@ -79,7 +79,7 @@ namespace HayaguiKvs
             {
                 return Status::CreateErrorStatus();
             }
-            return char_storage_.Append(obj).IsError();
+            return char_storage_.Append(obj);
         }
 
     private:
