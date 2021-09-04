@@ -25,7 +25,13 @@ namespace HayaguiKvs
         static const OptionalForConstObj<UnsignedInt64ForLogInfo> ReadFromStorage(SequentialReadCharStorageInterface &char_storage)
         {
             SliceContainer container;
-            if (char_storage.Read(container, 8).IsError()) {
+            if (char_storage.Read(container, 8).IsError())
+            {
+                return OptionalForConstObj<UnsignedInt64ForLogInfo>::CreateInvalidObj();
+            }
+            int len;
+            if (container.GetLen(len).IsError() || len != 8)
+            {
                 return OptionalForConstObj<UnsignedInt64ForLogInfo>::CreateInvalidObj();
             }
             uint64_t value;
@@ -49,18 +55,29 @@ namespace HayaguiKvs
         Status RetrieveNextEntry(SliceContainer &container)
         {
             const OptionalForConstObj<UnsignedInt64ForLogInfo> result = UnsignedInt64ForLogInfo::ReadFromStorage(char_storage_);
-            if (!result.isPresent()) {
+            if (!result.isPresent())
+            {
                 return Status::CreateErrorStatus();
             }
             const UnsignedInt64ForLogInfo len = result.get();
-            return char_storage_.Read(container, len.value_);
+
+            if (char_storage_.Read(container, len.value_).IsError())
+            {
+                return Status::CreateErrorStatus();
+            }
+
+            int slice_len;
+            if (container.GetLen(slice_len).IsError() || slice_len != len.value_)
+            {
+                return Status::CreateErrorStatus();
+            }
+            return Status::CreateOkStatus();
         }
 
     private:
         SequentialReadCharStorageInterface &char_storage_;
     };
 
-    template <class BlockBuffer>
     class LogAppender
     {
     public:

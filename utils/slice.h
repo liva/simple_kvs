@@ -162,7 +162,8 @@ namespace HayaguiKvs
         }
         virtual Status CopyToBufferWithRegion(char *buf, const size_t offset, const size_t len) const override final
         {
-            if (offset + len > GetLen()) {
+            if (offset + len > GetLen())
+            {
                 return Status::CreateErrorStatus();
             }
             return CopyToBufferWithRegion(buf, Region(*this, offset, len));
@@ -272,10 +273,17 @@ namespace HayaguiKvs
         }
         virtual void PrintWithRegion(const Region region) const override final
         {
+            printf("<");
             for (int i = region.offset_; i < region.len_; i++)
             {
-                printf("%c", buf_[i]);
+                char c = buf_[i];
+                if (32 <= c && c <= 126) {
+                    printf("%c", c);
+                } else {
+                    printf("[%02X]", c);
+                }
             }
+            printf(">(len: %zu)", region.len_);
             fflush(stdout);
         }
         virtual int GetLen() const override

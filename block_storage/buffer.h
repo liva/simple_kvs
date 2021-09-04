@@ -30,7 +30,7 @@ namespace HayaguiKvs
         {
             memcpy(GetPtrToTheBuffer(), buffer.GetConstPtrToTheBuffer(), kSize);
         }
-        void CopyFrom(const uint8_t *buffer, size_t offset, size_t len)
+        void CopyFrom(const uint8_t *const buffer, size_t offset, size_t len)
         {
             assert(offset + len <= kSize);
             memcpy(GetPtrToTheBuffer() + offset, buffer, len);
@@ -45,10 +45,10 @@ namespace HayaguiKvs
             assert(offset + len <= kSize);
             memcpy(buffer, GetConstPtrToTheBuffer() + offset, len);
         }
-        int Memcmp(const char *const buf, const size_t len) const
+        int Memcmp(const char *const buf, size_t offset, const size_t len) const
         {
             assert(len <= kSize);
-            return memcmp(GetConstPtrToTheBuffer(), buf, len);
+            return memcmp(GetConstPtrToTheBuffer() + offset, buf, len);
         }
         template <class T>
         T GetValue(const size_t offset) const

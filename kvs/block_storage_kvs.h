@@ -49,7 +49,7 @@ namespace HayaguiKvs
         }
         virtual Status Delete(WriteOptions options, const ConstSlice &key) override
         {
-            if (Signature::StorePutSignature(log_).IsError())
+            if (Signature::StoreDeleteSignature(log_).IsError())
             {
                 return Status::CreateErrorStatus();
             }
@@ -93,7 +93,6 @@ namespace HayaguiKvs
                 uint8_t signature;
                 if (Signature::RetrieveSignature(log, signature).IsError())
                 {
-                    cache_kvs_.Print(); // debug
                     return;
                 }
                 if (signature == Signature::kSignaturePut)
@@ -139,15 +138,22 @@ namespace HayaguiKvs
 
         BlockStorageInterface<BlockBuffer> &underlying_storage_;
         AppendOnlyCharStorage<BlockBuffer> char_storage_;
-        LogAppender<BlockBuffer> log_;
+        LogAppender log_;
         Kvs &cache_kvs_;
 
         class Signature
         {
         public:
-            static Status StorePutSignature(LogAppender<BlockBuffer> &log)
+            static Status StoreDeleteSignature(LogAppender &log)
             {
-                ConstSlice signature((const char *)&kSignaturePut, 1);
+                const uint8_t value = kSignatureDelete;
+                ConstSlice signature((const char *)&value, 1);
+                return log.AppendEntry(signature);
+            }
+            static Status StorePutSignature(LogAppender &log)
+            {
+                const uint8_t value = kSignaturePut;
+                ConstSlice signature((const char *)&value, 1);
                 return log.AppendEntry(signature);
             }
             static Status RetrieveSignature(LogReader &log, uint8_t &signature)

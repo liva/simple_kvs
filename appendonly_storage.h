@@ -90,10 +90,20 @@ namespace HayaguiKvs
                 return Status::CreateErrorStatus();
             }
             BlockBufferInterface &buf = buf_;
-            const bool matched = (buf.Memcmp(kSignature, strlen(kSignature)) == 0);
+            const bool matched = (buf.Memcmp(kSignature, 0, strlen(kSignature)) == 0);
             if (!matched)
             {
                 len_ = 0;
+
+                BlockBufferInterface &buf = buf_;
+                buf.CopyFrom((const uint8_t* const)kSignature, 0, strlen(kSignature));
+                buf.SetValue<uint64_t>(getOffsetOfSize(), len_);
+                if (storage_.Write(LogicalBlockAddress(0), buf_).IsError())
+                {
+                    buf.SetValue<uint64_t>(getOffsetOfSize(), len_);
+                    return Status::CreateErrorStatus();
+                }
+
                 opened_ = true;
                 return Status::CreateOkStatus();
             }
@@ -134,7 +144,8 @@ namespace HayaguiKvs
         static constexpr const char *const kSignature = "HAYAGUI_APPEND_FILE_V1_";
     };
 
-    struct AppendCharStorageInterface {
+    struct AppendCharStorageInterface
+    {
         virtual ~AppendCharStorageInterface() = 0;
         virtual Status Open() = 0;
         virtual Status Append(const ValidSlice &slice) = 0;
