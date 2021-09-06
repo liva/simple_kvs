@@ -210,7 +210,7 @@ static void skvs_iterator_jump_deleted_value()
     assert(container.DoesMatch(value3));
 }
 
-void iterator_main()
+int main()
 {
     iterator_delete();
     skvs_iterator_create();
@@ -221,4 +221,5 @@ void iterator_main()
     skvs_iterator_delete();
     skvs_iterator_next();
     skvs_iterator_jump_deleted_value();
+    return 0;
 }

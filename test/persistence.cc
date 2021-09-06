@@ -75,23 +75,6 @@ static inline void recover_from_block_storage()
     }
 }
 
-class File
-{
-public:
-    void Init()
-    {
-        if (access(fname_, F_OK) == 0)
-        {
-            remove(fname_);
-        }
-    }
-    void Cleanup()
-    {
-        remove(fname_);
-    }
-    static constexpr const char *const fname_ = "storage_file";
-};
-
 static inline void recover_from_file()
 {
     START_TEST;
@@ -146,10 +129,11 @@ static inline void store_many_kvpairs()
     file.Cleanup();
 }
 
-void persistence_main()
+int main()
 {
     persist_with_underlying_kvs();
     recover_from_block_storage();
     recover_from_file();
     store_many_kvpairs();
+    return 0;
 }

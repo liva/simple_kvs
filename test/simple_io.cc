@@ -97,7 +97,7 @@ static void write_unsorted_order() {
     assert(container.DoesMatch(value3));
 }
 
-void simple_io_main()
+int main()
 {
     read_without_write();
     write_and_read_once();
@@ -105,4 +105,5 @@ void simple_io_main()
     delete_and_read();
     write_sorted_order();
     write_unsorted_order();
+    return 0;
 }

@@ -7,8 +7,8 @@ class Test:
     def __init__(self, env, source_files):
         self.env = env
         self.source_files = source_files
-    def build_and_run(self):
-        self.env.build("-Wall -g3 -O2 --std=c++11 -I. -o test/a.out " + self.source_files)
+    def build_and_run(self, extra_option=''):
+        self.env.build("-Wall -g3 -O2 --std=c++11 {} -I. -o test/a.out {}".format(extra_option, self.source_files))
         self.env.run_command("./test/a.out")
 
 
@@ -24,7 +24,10 @@ def main():
     Test(env, "test/slice.cc").build_and_run()
     Test(env, "test/block_storage.cc").build_and_run()
     Test(env, "test/log.cc").build_and_run()
-    Test(env, "test/main.cc test/simple_io.cc test/iterator.cc test/persistence.cc").build_and_run()
+    Test(env, "test/simple_io.cc").build_and_run()
+    Test(env, "test/iterator.cc").build_and_run()
+    Test(env, "test/persistence.cc").build_and_run()
+    Test(env, "test/performance_evaluation.cc").build_and_run('-DNDEBUG')
     #shell.call("docker run --rm -it -v $PWD:$PWD -w $PWD unvme:ve /opt/nec/nosupport/llvm-ve/bin/clang++ -g3 -O2 --target=ve-linux -static --std=c++11 -o main main.cc -L/opt/nec/nosupport/llvm-ve/lib/clang/10.0.0/lib/linux -lclang_rt.builtins-ve  -lpthread -lm -lc ")
     #shell.check_call("./main")
 

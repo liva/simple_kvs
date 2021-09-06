@@ -4,6 +4,7 @@
 #include "block_storage/block_storage_multiplier.h"
 #include "block_storage/block_storage_with_cache.h"
 #include "./test.h"
+#include "misc.h"
 #include "test_storage.h"
 #include <memory>
 #include <vector>
@@ -310,23 +311,6 @@ static void cache()
     checker.Write(LogicalBlockAddress(2), kSignature3);
     assert(checker.ReadFromCache(LogicalBlockAddress(2), kSignature3).IsOk());
 }
-
-class File
-{
-public:
-    void Init()
-    {
-        if (access(fname_, F_OK) == 0)
-        {
-            remove(fname_);
-        }
-    }
-    void Cleanup()
-    {
-        remove(fname_);
-    }
-    static constexpr const char *const fname_ = "storage_file";
-};
 
 static void file_block_storage()
 {
