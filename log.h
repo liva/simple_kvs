@@ -35,7 +35,8 @@ namespace HayaguiKvs
                 return OptionalForConstObj<UnsignedInt64ForLogInfo>::CreateInvalidObj();
             }
             uint64_t value;
-            assert(container.CopyToBuffer((char *)&value).IsOk());
+            Status s1 = container.CopyToBuffer((char *)&value);
+            assert(s1.IsOk());
             return OptionalForConstObj<UnsignedInt64ForLogInfo>::CreateValidObj(UnsignedInt64ForLogInfo(value));
         }
 

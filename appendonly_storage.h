@@ -51,7 +51,8 @@ namespace HayaguiKvs
                 return Status::CreateErrorStatus();
             }
             int slice_len;
-            assert(container.GetLen(slice_len).IsOk());
+            Status s1 = container.GetLen(slice_len);
+            assert(s1.IsOk());
             offset_ += slice_len;
             return Status::CreateOkStatus();
         }
@@ -96,7 +97,7 @@ namespace HayaguiKvs
                 len_ = 0;
 
                 BlockBufferInterface &buf = buf_;
-                buf.CopyFrom((const uint8_t* const)kSignature, 0, strlen(kSignature));
+                buf.CopyFrom((const uint8_t *const)kSignature, 0, strlen(kSignature));
                 buf.SetValue<uint64_t>(getOffsetOfSize(), len_);
                 if (storage_.Write(LogicalBlockAddress(0), buf_).IsError())
                 {
@@ -182,12 +183,13 @@ namespace HayaguiKvs
             const size_t len = slice.GetLen();
             const size_t new_len = old_len + len;
             const LogicalBlockAddress start = BlockBufferInterface::GetAddressFromOffset(old_len);
-            const LogicalBlockAddress end = BlockBufferInterface::GetAddressFromOffset(new_len);
+            const LogicalBlockAddress end = BlockBufferInterface::GetAddressFromOffset(new_len - 1);
             const LogicalBlockRegion region = LogicalBlockRegion(start, end);
             const int cnt = region.GetRegionSize();
             BlockBuffers<BlockBuffer> buffers(cnt);
 
-            if (data_storage_.Read(start, *buffers.GetBlockBufferFromIndex(0)).IsError())
+            if (BlockBufferInterface::GetInBufferOffset(old_len) != 0 &&
+                data_storage_.Read(start, *buffers.GetBlockBufferFromIndex(0)).IsError())
             {
                 return Status::CreateErrorStatus();
             }
@@ -232,9 +234,11 @@ namespace HayaguiKvs
         {
             MultiplyRule rule;
             int i;
-            assert(rule.AppendRegion(LogicalBlockRegion(LogicalBlockAddress(0), LogicalBlockAddress(0)), i).IsOk());
+            Status s1 = rule.AppendRegion(LogicalBlockRegion(LogicalBlockAddress(0), LogicalBlockAddress(0)), i);
+            assert(s1.IsOk());
             assert(i == kMetaDataStorageIndex);
-            assert(rule.AppendRegion(LogicalBlockRegion(LogicalBlockAddress(1), blockstorage.GetMaxAddress()), i).IsOk());
+            Status s2 = rule.AppendRegion(LogicalBlockRegion(LogicalBlockAddress(1), blockstorage.GetMaxAddress()), i);
+            assert(s2.IsOk());
             assert(i == kDataStorageIndex);
             return BlockStorageMultiplier<BlockBuffer>(blockstorage, rule);
         }

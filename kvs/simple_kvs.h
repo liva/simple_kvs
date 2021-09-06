@@ -249,7 +249,7 @@ namespace HayaguiKvs
             entries_[i] = new ValidEntry(key, value);
             return Status::CreateOkStatus();
         }
-        static const int kEntryNum = 1000;
+        static const int kEntryNum = 4196;
         EntryInterface *entries_[kEntryNum];
     };
 

@@ -2,7 +2,9 @@
 #include "kvs/simple_kvs.h"
 #include "kvs/block_storage_kvs.h"
 #include "block_storage/memblock_storage.h"
+#include "block_storage/file_block_storage.h"
 #include "./test.h"
+#include "misc.h"
 #include <assert.h>
 #include <memory>
 #include <utility>
@@ -29,6 +31,7 @@ public:
         assert(container.DoesMatch(value3_));
         assert(kvs.Get(ReadOptions(), key4_, container).IsError());
     }
+
 private:
     ConstSlice key1_ = ConstSlice("111", 3);
     ConstSlice value1_ = ConstSlice("abcde", 5);
@@ -72,8 +75,81 @@ static inline void recover_from_block_storage()
     }
 }
 
+class File
+{
+public:
+    void Init()
+    {
+        if (access(fname_, F_OK) == 0)
+        {
+            remove(fname_);
+        }
+    }
+    void Cleanup()
+    {
+        remove(fname_);
+    }
+    static constexpr const char *const fname_ = "storage_file";
+};
+
+static inline void recover_from_file()
+{
+    START_TEST;
+    File file;
+    file.Init();
+
+    Tester tester;
+    {
+        FileBlockStorage block_storage(file.fname_);
+        SimpleKvs cache_kvs;
+        BlockStorageKvs<GenericBlockBuffer> block_storage_kvs(block_storage, cache_kvs);
+        tester.Write(block_storage_kvs);
+    }
+    {
+        FileBlockStorage block_storage(file.fname_);
+        SimpleKvs cache_kvs;
+        BlockStorageKvs<GenericBlockBuffer> block_storage_kvs(block_storage, cache_kvs);
+        tester.Read(block_storage_kvs);
+    }
+    file.Cleanup();
+}
+
+static inline void store_many_kvpairs()
+{
+    START_TEST;
+    File file;
+    file.Init();
+
+    {
+        FileBlockStorage block_storage(file.fname_);
+        SimpleKvs cache_kvs;
+        BlockStorageKvs<GenericBlockBuffer> block_storage_kvs(block_storage, cache_kvs);
+        for (int i = 0; i < 3500; i++)
+        {
+            char key[20];
+            snprintf(key, sizeof(key), "%016d", i);
+            assert(block_storage_kvs.Put(WriteOptions(), ConstSlice(key, strlen(key)), CreateSliceFromChar('a', 500)).IsOk());
+        }
+    }
+    {
+        FileBlockStorage block_storage(file.fname_);
+        SimpleKvs cache_kvs;
+        BlockStorageKvs<GenericBlockBuffer> block_storage_kvs(block_storage, cache_kvs);
+        for (int i = 0; i < 3500; i++)
+        {
+            char key[20];
+            snprintf(key, sizeof(key), "%016d", i);
+            SliceContainer container;
+            assert(block_storage_kvs.Get(ReadOptions(), ConstSlice(key, strlen(key)), container).IsOk());
+        }
+    }
+    file.Cleanup();
+}
+
 void persistence_main()
 {
     persist_with_underlying_kvs();
     recover_from_block_storage();
+    recover_from_file();
+    store_many_kvpairs();
 }

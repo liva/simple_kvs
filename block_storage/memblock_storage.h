@@ -1,6 +1,5 @@
 #pragma once
 #include "block_storage_interface.h"
-#include <assert.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -62,7 +61,7 @@ namespace HayaguiKvs
         {
             return block_buf_[address.GetRaw()];
         }
-        static const int kNumBlocks = 1024;
+        static const int kNumBlocks = 4196;
         MemInternalBlock *block_buf_[kNumBlocks];
     };
 }

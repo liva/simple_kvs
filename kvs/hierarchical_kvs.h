@@ -50,7 +50,8 @@ namespace HayaguiKvs
                 return Optional<KvsEntryIterator>::CreateInvalidObj();
             }
             SliceContainer key_container;
-            assert(cache_iter.get().GetKey(key_container).IsOk());
+            Status s1 = cache_iter.get().GetKey(key_container);
+            assert(s1.IsOk());
             return Optional<KvsEntryIterator>::CreateValidObj(GetIterator(key_container.CreateConstSlice()));
         }
         virtual KvsEntryIterator GetIterator(const ConstSlice &key) override

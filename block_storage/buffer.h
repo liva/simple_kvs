@@ -38,7 +38,8 @@ namespace HayaguiKvs
         void CopyFrom(const ValidSlice &slice, size_t offset)
         {
             assert(offset + slice.GetLen() <= kSize);
-            assert(slice.CopyToBuffer((char *)GetPtrToTheBuffer() + offset).IsOk());
+            Status s1 = slice.CopyToBuffer((char *)GetPtrToTheBuffer() + offset);
+            assert(s1.IsOk());
         }
         void CopyTo(uint8_t *const buffer, size_t offset, size_t len) const
         {
@@ -73,11 +74,11 @@ namespace HayaguiKvs
             }
             printf("]\n");
         }
-        static const size_t kSize = 512;
-
-    protected:
-        virtual uint8_t *GetPtrToTheBuffer() = 0;
+        virtual uint8_t *GetPtrToTheBuffer() = 0; // should be used only for interplaying with other libraries
         virtual const uint8_t *GetConstPtrToTheBuffer() const = 0;
+
+        static const size_t kSize = 512;
+    protected:
     };
     BlockBufferInterface::~BlockBufferInterface()
     {
@@ -284,8 +285,6 @@ namespace HayaguiKvs
             MarkUsedFlagToMovedObj(std::move(obj));
             return *this;
         }
-
-    private:
         virtual uint8_t *GetPtrToTheBuffer() override
         {
             return buf_;
@@ -294,6 +293,8 @@ namespace HayaguiKvs
         {
             return buf_;
         }
+
+    private:
         void MarkUsedFlagToMovedObj(GenericBlockBuffer &&obj)
         {
             obj.buf_ = nullptr;

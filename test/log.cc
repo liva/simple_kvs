@@ -2,21 +2,13 @@
 #include "block_storage/memblock_storage.h"
 #include "log.h"
 #include "./test.h"
+#include "test_storage.h"
+#include "misc.h"
 #include <memory>
 #include <vector>
 std::vector<int> dummy;
 
 using namespace HayaguiKvs;
-
-static ConstSlice CreateSliceFromChar(char c, int cnt)
-{
-    char buf[cnt];
-    for (int i = 0; i < cnt; i++)
-    {
-        buf[i] = c;
-    }
-    return ConstSlice(buf, cnt);
-}
 
 static void append_only_storage()
 {
@@ -65,6 +57,30 @@ static void append_only_storage()
     }
 }
 
+static void check_cache_of_append_only_storage()
+{
+    START_TEST;
+    TestStorage block_storage;
+    AppendOnlyCharStorage<GenericBlockBuffer> append_only_storage(block_storage);
+    assert(append_only_storage.Open().IsOk());
+    block_storage.ResetCnt();
+
+    ConstSlice slice1 = CreateSliceFromChar('a', BlockBufferInterface::kSize);
+    assert(append_only_storage.Append(slice1).IsOk());
+    assert(block_storage.IsWriteCntAdded(2)); // 1 for data write, 1 for meta data update
+    assert(block_storage.IsReadCntAdded(0));
+
+    ConstSlice slice2 = CreateSliceFromChar('b', BlockBufferInterface::kSize / 2);
+    assert(append_only_storage.Append(slice2).IsOk());
+    assert(block_storage.IsWriteCntAdded(2)); // same as well
+    assert(block_storage.IsReadCntAdded(0));
+
+    ConstSlice slice3 = CreateSliceFromChar('c', BlockBufferInterface::kSize);
+    assert(append_only_storage.Append(slice3).IsOk());
+    assert(block_storage.IsWriteCntAdded(3)); // 2 for data write(the data lies upon two blocks), 1 for meta data update
+    assert(block_storage.IsReadCntAdded(0));
+}
+
 static void log()
 {
     START_TEST;
@@ -108,6 +124,7 @@ static void log()
 int main()
 {
     append_only_storage();
+    check_cache_of_append_only_storage();
     log();
     return 0;
 }

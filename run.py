@@ -34,6 +34,10 @@ def main():
     shell.check_call("docker exec -it simple_kvs cp -r *.h /opt/nec/ve/ex_include")
     shell.check_call("docker exec -it simple_kvs cp -r utils /opt/nec/ve/include")
     shell.check_call("docker exec -it simple_kvs cp -r utils /opt/nec/ve/ex_include")
+    shell.check_call("docker exec -it simple_kvs cp -r block_storage /opt/nec/ve/include")
+    shell.check_call("docker exec -it simple_kvs cp -r block_storage /opt/nec/ve/ex_include")
+    shell.check_call("docker exec -it simple_kvs cp -r kvs /opt/nec/ve/include")
+    shell.check_call("docker exec -it simple_kvs cp -r kvs /opt/nec/ve/ex_include")
     shell.check_call("docker commit simple_kvs simple_kvs:ve")
     shell.check_call("docker rm -f simple_kvs")
 

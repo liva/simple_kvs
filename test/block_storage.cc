@@ -1,8 +1,10 @@
 #include "block_storage/block_storage_interface.h"
 #include "block_storage/memblock_storage.h"
+#include "block_storage/file_block_storage.h"
 #include "block_storage/block_storage_multiplier.h"
 #include "block_storage/block_storage_with_cache.h"
 #include "./test.h"
+#include "test_storage.h"
 #include <memory>
 #include <vector>
 std::vector<int> dummy;
@@ -107,32 +109,57 @@ private:
     BlockBuffers<GenericBlockBuffer> buffers_;
 };
 
+class BlockStorageTester
+{
+public:
+    BlockStorageTester(BlockStorageInterface<GenericBlockBuffer> &storage) : storage_(storage)
+    {
+    }
+    void Open()
+    {
+        assert(storage_.Open().IsOk());
+    }
+    void Write()
+    {
+        GenericBlockBuffer buf1, buf2, buf3;
+        InitializeBuffer(buf1, 0);
+        InitializeBuffer(buf2, 10);
+        InitializeBuffer(buf3, 20);
+        assert(storage_.Write(LogicalBlockAddress(0), buf1).IsOk());
+        assert(storage_.Write(storage_.GetMaxAddress(), buf3).IsOk());
+        assert(storage_.Write(LogicalBlockAddress(0), buf2).IsOk());
+
+        BuffersManager buffers_manager;
+        buffers_manager.InitializeBuffers(30);
+        assert(storage_.WriteBlocks(LogicalBlockRegion(LogicalBlockAddress(1), LogicalBlockAddress(buffers_manager.kBufferCnt)), buffers_manager.GetRefOfBuffers()).IsOk());
+    }
+    void Read()
+    {
+        GenericBlockBuffer buf4, buf5;
+        assert(storage_.Read(LogicalBlockAddress(0), buf4).IsOk());
+        assert(storage_.Read(storage_.GetMaxAddress(), buf5).IsOk());
+
+        assert(CheckBuffer(buf4, 10).IsOk());
+        assert(CheckBuffer(buf5, 20).IsOk());
+
+        BuffersManager buffers_manager;
+        buffers_manager.InitializeBuffers(80);
+        assert(storage_.ReadBlocks(LogicalBlockRegion(LogicalBlockAddress(1), LogicalBlockAddress(buffers_manager.kBufferCnt)), buffers_manager.GetRefOfBuffers()).IsOk());
+        assert(buffers_manager.CheckBuffers(30).IsOk());
+    }
+
+private:
+    BlockStorageInterface<GenericBlockBuffer> &storage_;
+};
+
 static void memblock_storage()
 {
     START_TEST;
-    std::unique_ptr<BlockStorageInterface<GenericBlockBuffer>> storage = std::unique_ptr<MemBlockStorage>(new MemBlockStorage);
-    assert(storage->Open().IsOk());
-    GenericBlockBuffer buf1, buf2, buf3;
-    InitializeBuffer(buf1, 0);
-    InitializeBuffer(buf2, 10);
-    InitializeBuffer(buf3, 20);
-    assert(storage->Write(LogicalBlockAddress(0), buf1).IsOk());
-    assert(storage->Write(storage->GetMaxAddress(), buf3).IsOk());
-    assert(storage->Write(LogicalBlockAddress(0), buf2).IsOk());
-
-    GenericBlockBuffer buf4, buf5;
-    assert(storage->Read(LogicalBlockAddress(0), buf4).IsOk());
-    assert(storage->Read(storage->GetMaxAddress(), buf5).IsOk());
-
-    assert(CheckBuffer(buf4, 10).IsOk());
-    assert(CheckBuffer(buf5, 20).IsOk());
-
-    BuffersManager buffers_manager;
-    buffers_manager.InitializeBuffers(30);
-    assert(storage->WriteBlocks(LogicalBlockRegion(LogicalBlockAddress(0), LogicalBlockAddress(buffers_manager.kBufferCnt - 1)), buffers_manager.GetRefOfBuffers()).IsOk());
-    buffers_manager.InitializeBuffers(80);
-    assert(storage->ReadBlocks(LogicalBlockRegion(LogicalBlockAddress(0), LogicalBlockAddress(buffers_manager.kBufferCnt - 1)), buffers_manager.GetRefOfBuffers()).IsOk());
-    assert(buffers_manager.CheckBuffers(30).IsOk());
+    MemBlockStorage storage;
+    BlockStorageTester tester(storage);
+    tester.Open();
+    tester.Write();
+    tester.Read();
 }
 
 static void multiplier()
@@ -181,76 +208,11 @@ static void multiplier()
     }
 }
 
-template <class BlockBuffer>
-class TestStorage : public BlockStorageInterface<BlockBuffer>
-{
-public:
-    TestStorage()
-    {
-    }
-    virtual ~TestStorage()
-    {
-    }
-
-    virtual Status Open() override
-    {
-        return Status::CreateOkStatus();
-    }
-    void ResetCnt()
-    {
-        last_read_cnt_ = 0;
-        last_write_cnt_ = 0;
-        read_cnt_ = 0;
-        write_cnt_ = 0;
-    }
-    bool IsReadCntIncremented()
-    {
-        bool flag = read_cnt_ == last_read_cnt_ + 1;
-        last_read_cnt_ = read_cnt_;
-        return flag;
-    }
-    bool IsWriteCntIncremented()
-    {
-        bool flag = write_cnt_ == last_write_cnt_ + 1;
-        last_write_cnt_ = write_cnt_;
-        return flag;
-    }
-    virtual LogicalBlockAddress GetMaxAddress() const override
-    {
-        return storage_.GetMaxAddress();
-    }
-    Status ReadUnderlyingStorage(const LogicalBlockAddress address, BlockBuffer &buffer)
-    {
-        return storage_.Read(address, buffer);
-    }
-    Status WriteUnderlyingStorage(const LogicalBlockAddress address, const BlockBuffer &buffer)
-    {
-        return storage_.Write(address, buffer);
-    }
-
-private:
-    virtual Status ReadInternal(const LogicalBlockAddress address, BlockBuffer &buffer) override
-    {
-        read_cnt_++;
-        return storage_.Read(address, buffer);
-    }
-    virtual Status WriteInternal(const LogicalBlockAddress address, const BlockBuffer &buffer) override
-    {
-        write_cnt_++;
-        return storage_.Write(address, buffer);
-    }
-    int last_read_cnt_ = 0;
-    int last_write_cnt_ = 0;
-    int read_cnt_ = 0;
-    int write_cnt_ = 0;
-    MemBlockStorage storage_;
-};
-
 class Checker
 {
 public:
     Checker() = delete;
-    Checker(BlockStorageWithOneCache<GenericBlockBuffer> &storage_with_cache, TestStorage<GenericBlockBuffer> &underlying_storage)
+    Checker(BlockStorageWithOneCache<GenericBlockBuffer> &storage_with_cache, TestStorage &underlying_storage)
         : storage_with_cache_(storage_with_cache),
           underlying_storage_(underlying_storage)
     {
@@ -301,13 +263,13 @@ public:
 
 private:
     BlockStorageWithOneCache<GenericBlockBuffer> &storage_with_cache_;
-    TestStorage<GenericBlockBuffer> &underlying_storage_;
+    TestStorage &underlying_storage_;
 };
 
 static void cache()
 {
     START_TEST;
-    TestStorage<GenericBlockBuffer> underlying_storage;
+    TestStorage underlying_storage;
     BlockStorageWithOneCache<GenericBlockBuffer> storage_with_cache(underlying_storage);
     Checker checker(storage_with_cache, underlying_storage);
     GenericBlockBuffer buf;
@@ -349,6 +311,43 @@ static void cache()
     assert(checker.ReadFromCache(LogicalBlockAddress(2), kSignature3).IsOk());
 }
 
+class File
+{
+public:
+    void Init()
+    {
+        if (access(fname_, F_OK) == 0)
+        {
+            remove(fname_);
+        }
+    }
+    void Cleanup()
+    {
+        remove(fname_);
+    }
+    static constexpr const char *const fname_ = "storage_file";
+};
+
+static void file_block_storage()
+{
+    START_TEST;
+    File file;
+    file.Init();
+    {
+        FileBlockStorage storage(file.fname_);
+        BlockStorageTester tester(storage);
+        tester.Open();
+        tester.Write();
+    }
+    {
+        FileBlockStorage storage(file.fname_);
+        BlockStorageTester tester(storage);
+        tester.Open();
+        tester.Read();
+    }
+    file.Cleanup();
+}
+
 int main()
 {
     cmp_lba();
@@ -356,5 +355,6 @@ int main()
     check_region_overlapped();
     multiplier();
     cache();
+    file_block_storage();
     return 0;
 }
