@@ -202,4 +202,24 @@ namespace HayaguiKvs
         Kvs &kvs_;
         ConstSlice key_;
     };
+    
+    struct KvsAllocatorInterface
+    {
+        virtual Kvs *Allocate() = 0;
+        virtual void Release(Kvs *kvs) = 0;
+    };
+    
+    template <class T>
+    class GenericKvsAllocator : public KvsAllocatorInterface
+    {
+    public:
+        virtual Kvs *Allocate() override
+        {
+            return new T();
+        }
+        virtual void Release(Kvs *kvs) override
+        {
+            delete kvs;
+        }
+    };
 }

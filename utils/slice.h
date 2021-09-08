@@ -160,14 +160,6 @@ namespace HayaguiKvs
         {
             return CopyToBufferWithRegion(buf, Region(*this, 0, GetLen()));
         }
-        virtual Status CopyToBufferWithRegion(char *buf, const size_t offset, const size_t len) const override final
-        {
-            if (offset + len > GetLen())
-            {
-                return Status::CreateErrorStatus();
-            }
-            return CopyToBufferWithRegion(buf, Region(*this, offset, len));
-        }
         virtual void Print() const override final
         {
             PrintWithRegion(Region(*this, 0, GetLen()));
@@ -177,6 +169,15 @@ namespace HayaguiKvs
     protected:
         friend class ShrinkedSlice;
         friend class ConstSlice;
+        virtual Status CopyToBufferWithRegion(char *buf, const size_t offset, const size_t len) const override final
+        {
+            if (offset + len > GetLen())
+            {
+                return Status::CreateErrorStatus();
+            }
+            return CopyToBufferWithRegion(buf, Region(*this, offset, len));
+        }
+
         // TODO: in principle, its possible to remove this method, but we don't have such time.
         // It's still better than before where clients call GetRawPtr() without hesitation.
         // Now, only Slice-related classes call this.
@@ -277,9 +278,12 @@ namespace HayaguiKvs
             for (int i = region.offset_; i < region.len_; i++)
             {
                 char c = buf_[i];
-                if (32 <= c && c <= 126) {
+                if (32 <= c && c <= 126)
+                {
                     printf("%c", c);
-                } else {
+                }
+                else
+                {
                     printf("[%02X]", c);
                 }
             }
@@ -355,6 +359,12 @@ namespace HayaguiKvs
         }
         SliceContainer(const SliceContainer &) = delete;
         SliceContainer &operator=(const SliceContainer &) = delete;
+        SliceContainer &operator=(SliceContainer &&obj)
+        {
+            slice_ = obj.slice_;
+            MarkUsedFlagToMovedObj(std::move(obj));
+            return *this;
+        }
         Status Set(const Slice *slice)
         {
             return slice->SetToContainer(*this);
@@ -394,6 +404,14 @@ namespace HayaguiKvs
         {
             return slice_->IsValid();
         }
+        Status Cmp(const SliceContainer &container, CmpResult &result) const
+        {
+            if (container.slice_ == nullptr)
+            {
+                return Status::CreateErrorStatus();
+            }
+            return slice_->Cmp(*container.slice_, result);
+        }
         Status Cmp(const Slice &slice, CmpResult &result) const
         {
             return slice_->Cmp(slice, result);
@@ -420,11 +438,11 @@ namespace HayaguiKvs
             return slice_->CopyToBuffer(buf);
         }
 
-        bool IsSliceAvailable()
+        const bool IsSliceAvailable() const
         {
             return slice_ != nullptr;
         }
-        ConstSlice CreateConstSlice()
+        ConstSlice CreateConstSlice() const
         {
             // IsSliceAvailable should be called in advance.
             if (slice_ == nullptr)
@@ -438,6 +456,10 @@ namespace HayaguiKvs
         }
 
     private:
+        void MarkUsedFlagToMovedObj(SliceContainer &&obj)
+        {
+            obj.slice_ = nullptr;
+        }
         ConstSlice *slice_;
     };
 

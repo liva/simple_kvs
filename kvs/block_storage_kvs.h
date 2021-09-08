@@ -24,6 +24,8 @@ namespace HayaguiKvs
             }
             RecoverFromStorage();
         }
+        BlockStorageKvs(const BlockStorageKvs &obj) = delete;
+        BlockStorageKvs &operator=(const BlockStorageKvs &obj) = delete;
         virtual ~BlockStorageKvs()
         {
         }

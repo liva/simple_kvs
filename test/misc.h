@@ -32,3 +32,4 @@ public:
     }
     static constexpr const char *const fname_ = "storage_file";
 };
+

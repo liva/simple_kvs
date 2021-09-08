@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <utility>
 #include <new>
+#include <stdint.h>
 
 namespace HayaguiKvs
 {

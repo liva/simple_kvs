@@ -20,6 +20,8 @@ namespace HayaguiKvs
                 abort();
             }
         }
+        HierarchicalKvs(const HierarchicalKvs &obj) = delete;
+        HierarchicalKvs &operator=(const HierarchicalKvs &obj) = delete;
         virtual ~HierarchicalKvs() override
         {
         }

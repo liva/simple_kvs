@@ -19,6 +19,8 @@ namespace HayaguiKvs
                 entries_[i] = new InvalidEntry;
             }
         }
+        SimpleKvs(const SimpleKvs &obj) = delete;
+        SimpleKvs &operator=(const SimpleKvs &obj) = delete;
         virtual ~SimpleKvs() override
         {
             for (int i = 0; i < kEntryNum; i++)
