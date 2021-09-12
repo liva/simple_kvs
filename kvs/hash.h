@@ -34,7 +34,6 @@ namespace HayaguiKvs
         HashKvs() = delete;
         HashKvs(int bucket_size, KvsAllocatorInterface &underlying_kvs_allocator, HashCalculatorInterface &hash_calcurator)
             : bucket_size_(bucket_size),
-              underlying_kvs_allocator_(underlying_kvs_allocator),
               buckets_(GenerateBuckets(bucket_size, underlying_kvs_allocator)),
               hash_calcurator_(hash_calcurator)
         {
@@ -43,7 +42,7 @@ namespace HayaguiKvs
         {
             for (int i = 0; i < bucket_size_; i++)
             {
-                underlying_kvs_allocator_.Release(buckets_[i]);
+                delete buckets_[i];
             }
             delete[] buckets_;
         }
@@ -174,7 +173,6 @@ namespace HayaguiKvs
             return buckets;
         }
         const int bucket_size_;
-        KvsAllocatorInterface &underlying_kvs_allocator_;
         Kvs **buckets_;
         HashCalculatorInterface &hash_calcurator_;
     };

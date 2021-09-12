@@ -148,7 +148,7 @@ namespace HayaguiKvs
         }
     };
     inline Kvs::~Kvs() {}
-    
+
     class GenericKvsEntryIteratorBase : public KvsEntryIteratorBaseInterface
     {
     public:
@@ -202,24 +202,27 @@ namespace HayaguiKvs
         Kvs &kvs_;
         ConstSlice key_;
     };
-    
+
     struct KvsAllocatorInterface
     {
-        virtual Kvs *Allocate() = 0;
-        virtual void Release(Kvs *kvs) = 0;
+        virtual Kvs *Allocate() = 0; // allocated Kvs can be released with delete
     };
-    
+
+    struct KvsContainerInterface
+    {
+        virtual Kvs *operator->() = 0;
+    };
+
     template <class T>
-    class GenericKvsAllocator : public KvsAllocatorInterface
+    class GenericKvsContainer : public KvsContainerInterface
     {
     public:
-        virtual Kvs *Allocate() override
+        virtual Kvs *operator->() override
         {
-            return new T();
+            return &kvs_;
         }
-        virtual void Release(Kvs *kvs) override
-        {
-            delete kvs;
-        }
+
+    private:
+        T kvs_;
     };
 }

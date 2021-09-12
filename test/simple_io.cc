@@ -7,87 +7,95 @@
 
 using namespace HayaguiKvs;
 
-class ReadWithoutWriteTester : public Tester
+class ReadWithoutWriteTester
 {
 public:
-    ReadWithoutWriteTester(KvsAllocatorInterface &kvs_allocator) : Tester(kvs_allocator)
+    ReadWithoutWriteTester(KvsContainerInterface &kvs_container) : kvs_container_(kvs_container)
     {
     }
-    virtual void Do() override
+    void Do()
     {
         START_TEST;
         ConstSlice key("111", 3);
         SliceContainer container;
-        assert(kvs_->Get(ReadOptions(), key, container).IsError());
+        assert(kvs_container_->Get(ReadOptions(), key, container).IsError());
     }
+private:
+    KvsContainerInterface &kvs_container_;
 };
 
-class WriteAndReadOnceTester : public Tester
+class WriteAndReadOnceTester
 {
 public:
-    WriteAndReadOnceTester(KvsAllocatorInterface &kvs_allocator) : Tester(kvs_allocator)
+    WriteAndReadOnceTester(KvsContainerInterface &kvs_container) : kvs_container_(kvs_container)
     {
     }
-    virtual void Do() override
+    void Do()
     {
         START_TEST;
         ConstSlice key1("111", 3);
         ConstSlice key2("111", 3);
         ConstSlice value1("abcde", 5);
-        assert(kvs_->Put(WriteOptions(), key1, value1).IsOk());
+        assert(kvs_container_->Put(WriteOptions(), key1, value1).IsOk());
         SliceContainer container;
-        assert(kvs_->Get(ReadOptions(), key2, container).IsOk());
+        assert(kvs_container_->Get(ReadOptions(), key2, container).IsOk());
         assert(container.DoesMatch(value1));
     }
+private:
+    KvsContainerInterface &kvs_container_;
 };
 
-class WriteTwiceThenReadTester : public Tester
+class WriteTwiceThenReadTester
 {
 public:
-    WriteTwiceThenReadTester(KvsAllocatorInterface &kvs_allocator) : Tester(kvs_allocator)
+    WriteTwiceThenReadTester(KvsContainerInterface &kvs_container) : kvs_container_(kvs_container)
     {
     }
-    virtual void Do() override
+    void Do()
     {
         START_TEST;
         ConstSlice key("123", 3);
         ConstSlice value1("abcde", 5);
         ConstSlice value2("defg", 4);
-        assert(kvs_->Put(WriteOptions(), key, value1).IsOk());
-        assert(kvs_->Put(WriteOptions(), key, value2).IsOk());
+        assert(kvs_container_->Put(WriteOptions(), key, value1).IsOk());
+        assert(kvs_container_->Put(WriteOptions(), key, value2).IsOk());
         SliceContainer container;
-        assert(kvs_->Get(ReadOptions(), key, container).IsOk());
+        assert(kvs_container_->Get(ReadOptions(), key, container).IsOk());
         assert(container.DoesMatch(value2));
     }
+private:
+    KvsContainerInterface &kvs_container_;
 };
 
-class DeleteAndReadTester : public Tester
+class DeleteAndReadTester
 {
 public:
-    DeleteAndReadTester(KvsAllocatorInterface &kvs_allocator) : Tester(kvs_allocator)
+    DeleteAndReadTester(KvsContainerInterface &kvs_container) : kvs_container_(kvs_container)
     {
     }
-    virtual void Do() override
+    void Do()
     {
         START_TEST;
         ConstSlice key1("111", 3);
         ConstSlice key2("111", 3);
         ConstSlice key3("111", 3);
         ConstSlice value1("abcde", 5);
-        assert(kvs_->Put(WriteOptions(), key1, value1).IsOk());
-        assert(kvs_->Delete(WriteOptions(), key2).IsOk());
+        assert(kvs_container_->Put(WriteOptions(), key1, value1).IsOk());
+        assert(kvs_container_->Delete(WriteOptions(), key2).IsOk());
         SliceContainer container;
-        assert(kvs_->Get(ReadOptions(), key3, container).IsError());
+        assert(kvs_container_->Get(ReadOptions(), key3, container).IsError());
     }
+private:
+    KvsContainerInterface &kvs_container_;
 };
 
-class WriteSortedOrderTester : public Tester
+class WriteSortedOrderTester
 {
 public:
-    WriteSortedOrderTester(KvsAllocatorInterface &kvs_allocator) : Tester(kvs_allocator)
+    WriteSortedOrderTester(KvsContainerInterface &kvs_container) : kvs_container_(kvs_container)
     {
     }
-    virtual void Do() override
+    void Do()
     {
         START_TEST;
         ConstSlice key1("10000", 1);
@@ -96,26 +104,28 @@ public:
         ConstSlice value1("abcde", 5);
         ConstSlice value2("fghi", 4);
         ConstSlice value3("xy", 2);
-        assert(kvs_->Put(WriteOptions(), key1, value1).IsOk());
-        assert(kvs_->Put(WriteOptions(), key2, value2).IsOk());
-        assert(kvs_->Put(WriteOptions(), key3, value3).IsOk());
+        assert(kvs_container_->Put(WriteOptions(), key1, value1).IsOk());
+        assert(kvs_container_->Put(WriteOptions(), key2, value2).IsOk());
+        assert(kvs_container_->Put(WriteOptions(), key3, value3).IsOk());
         SliceContainer container;
-        assert(kvs_->Get(ReadOptions(), key1, container).IsOk());
+        assert(kvs_container_->Get(ReadOptions(), key1, container).IsOk());
         assert(container.DoesMatch(value1));
-        assert(kvs_->Get(ReadOptions(), key2, container).IsOk());
+        assert(kvs_container_->Get(ReadOptions(), key2, container).IsOk());
         assert(container.DoesMatch(value2));
-        assert(kvs_->Get(ReadOptions(), key3, container).IsOk());
+        assert(kvs_container_->Get(ReadOptions(), key3, container).IsOk());
         assert(container.DoesMatch(value3));
     }
+private:
+    KvsContainerInterface &kvs_container_;
 };
 
-class WriteUnsortedOrderTester : public Tester
+class WriteUnsortedOrderTester
 {
 public:
-    WriteUnsortedOrderTester(KvsAllocatorInterface &kvs_allocator) : Tester(kvs_allocator)
+    WriteUnsortedOrderTester(KvsContainerInterface &kvs_container) : kvs_container_(kvs_container)
     {
     }
-    virtual void Do() override
+    void Do()
     {
         START_TEST;
         ConstSlice key1("3", 1);
@@ -124,57 +134,60 @@ public:
         ConstSlice value1("abcde", 5);
         ConstSlice value2("fghi", 4);
         ConstSlice value3("xy", 2);
-        assert(kvs_->Put(WriteOptions(), key1, value1).IsOk());
-        assert(kvs_->Put(WriteOptions(), key2, value2).IsOk());
-        assert(kvs_->Put(WriteOptions(), key3, value3).IsOk());
+        assert(kvs_container_->Put(WriteOptions(), key1, value1).IsOk());
+        assert(kvs_container_->Put(WriteOptions(), key2, value2).IsOk());
+        assert(kvs_container_->Put(WriteOptions(), key3, value3).IsOk());
         SliceContainer container;
-        assert(kvs_->Get(ReadOptions(), key1, container).IsOk());
+        assert(kvs_container_->Get(ReadOptions(), key1, container).IsOk());
         assert(container.DoesMatch(value1));
-        assert(kvs_->Get(ReadOptions(), key2, container).IsOk());
+        assert(kvs_container_->Get(ReadOptions(), key2, container).IsOk());
         assert(container.DoesMatch(value2));
-        assert(kvs_->Get(ReadOptions(), key3, container).IsOk());
+        assert(kvs_container_->Get(ReadOptions(), key3, container).IsOk());
         assert(container.DoesMatch(value3));
     }
 private:
+    KvsContainerInterface &kvs_container_;
 };
 
-void test(KvsAllocatorInterface &kvs_allocator)
+template<class KvsContainer>
+static void test()
 {
     {
-        ReadWithoutWriteTester tester(kvs_allocator);
+        KvsContainer kvs_container;
+        ReadWithoutWriteTester tester(kvs_container);
         tester.Do();
     }
     {
-        WriteAndReadOnceTester tester(kvs_allocator);
+        KvsContainer kvs_container;
+        WriteAndReadOnceTester tester(kvs_container);
         tester.Do();
     }
     {
-        WriteTwiceThenReadTester tester(kvs_allocator);
+        KvsContainer kvs_container;
+        WriteTwiceThenReadTester tester(kvs_container);
         tester.Do();
     }
     {
-        DeleteAndReadTester tester(kvs_allocator);
+        KvsContainer kvs_container;
+        DeleteAndReadTester tester(kvs_container);
         tester.Do();
     }
     {
-        WriteSortedOrderTester tester(kvs_allocator);
+        KvsContainer kvs_container;
+        WriteSortedOrderTester tester(kvs_container);
         tester.Do();
     }
     {
-        WriteUnsortedOrderTester tester(kvs_allocator);
+        KvsContainer kvs_container;
+        WriteUnsortedOrderTester tester(kvs_container);
         tester.Do();
     }
 }
 
 int main()
 {
-    {
-        GenericKvsAllocator<SimpleKvs> kvs_allocator;
-        test(kvs_allocator);
-    }
-    {
-        HashKvsAllocator kvs_allocator;
-        test(kvs_allocator);
-    }
+    test<GenericKvsContainer<SimpleKvs>>();
+    test<GenericKvsContainer<LinkedListKvs>>();
+    test<HashKvsContainer>();
     return 0;
 }

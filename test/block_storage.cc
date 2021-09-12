@@ -3,6 +3,7 @@
 #include "block_storage/file_block_storage.h"
 #include "block_storage/block_storage_multiplier.h"
 #include "block_storage/block_storage_with_cache.h"
+#include "block_storage/unvme.h"
 #include "./test.h"
 #include "misc.h"
 #include "test_storage.h"
@@ -110,54 +111,101 @@ private:
     BlockBuffers<GenericBlockBuffer> buffers_;
 };
 
+template <class BlockBuffer>
+struct BlockStorageContainerInterface
+{
+    virtual BlockStorageInterface<BlockBuffer> *operator->() = 0;
+};
+
+class MemBlockStorageContainer final : public BlockStorageContainerInterface<GenericBlockBuffer>
+{
+public:
+    MemBlockStorageContainer() {}
+    virtual BlockStorageInterface<GenericBlockBuffer> *operator->() override
+    {
+        return &block_storage_;
+    }
+
+private:
+    MemBlockStorage block_storage_;
+};
+
+class FileBlockStorageContainer final : public BlockStorageContainerInterface<GenericBlockBuffer>
+{
+public:
+    FileBlockStorageContainer() : block_storage_(file.fname_) {}
+    virtual BlockStorageInterface<GenericBlockBuffer> *operator->() override
+    {
+        return &block_storage_;
+    }
+
+private:
+    File file;
+    FileBlockStorage block_storage_;
+};
+
+class UnvmeBlockStorageContainer final : public BlockStorageContainerInterface<GenericBlockBuffer>
+{
+public:
+    UnvmeBlockStorageContainer() {}
+    virtual BlockStorageInterface<GenericBlockBuffer> *operator->() override
+    {
+        return &block_storage_;
+    }
+
+private:
+    UnvmeBlockStorage block_storage_;
+};
+
+template <class BlockBuffer>
 class BlockStorageTester
 {
 public:
-    BlockStorageTester(BlockStorageInterface<GenericBlockBuffer> &storage) : storage_(storage)
+    BlockStorageTester(BlockStorageContainerInterface<BlockBuffer> &container) : container_(container)
     {
     }
     void Open()
     {
-        assert(storage_.Open().IsOk());
+        assert(container_->Open().IsOk());
     }
     void Write()
     {
-        GenericBlockBuffer buf1, buf2, buf3;
+        BlockBuffer buf1, buf2, buf3;
         InitializeBuffer(buf1, 0);
         InitializeBuffer(buf2, 10);
         InitializeBuffer(buf3, 20);
-        assert(storage_.Write(LogicalBlockAddress(0), buf1).IsOk());
-        assert(storage_.Write(storage_.GetMaxAddress(), buf3).IsOk());
-        assert(storage_.Write(LogicalBlockAddress(0), buf2).IsOk());
+        assert(container_->Write(LogicalBlockAddress(0), buf1).IsOk());
+        assert(container_->Write(container_->GetMaxAddress(), buf3).IsOk());
+        assert(container_->Write(LogicalBlockAddress(0), buf2).IsOk());
 
         BuffersManager buffers_manager;
         buffers_manager.InitializeBuffers(30);
-        assert(storage_.WriteBlocks(LogicalBlockRegion(LogicalBlockAddress(1), LogicalBlockAddress(buffers_manager.kBufferCnt)), buffers_manager.GetRefOfBuffers()).IsOk());
+        assert(container_->WriteBlocks(LogicalBlockRegion(LogicalBlockAddress(1), LogicalBlockAddress(buffers_manager.kBufferCnt)), buffers_manager.GetRefOfBuffers()).IsOk());
     }
     void Read()
     {
-        GenericBlockBuffer buf4, buf5;
-        assert(storage_.Read(LogicalBlockAddress(0), buf4).IsOk());
-        assert(storage_.Read(storage_.GetMaxAddress(), buf5).IsOk());
+        BlockBuffer buf4, buf5;
+        assert(container_->Read(LogicalBlockAddress(0), buf4).IsOk());
+        assert(container_->Read(container_->GetMaxAddress(), buf5).IsOk());
 
         assert(CheckBuffer(buf4, 10).IsOk());
         assert(CheckBuffer(buf5, 20).IsOk());
 
         BuffersManager buffers_manager;
         buffers_manager.InitializeBuffers(80);
-        assert(storage_.ReadBlocks(LogicalBlockRegion(LogicalBlockAddress(1), LogicalBlockAddress(buffers_manager.kBufferCnt)), buffers_manager.GetRefOfBuffers()).IsOk());
+        assert(container_->ReadBlocks(LogicalBlockRegion(LogicalBlockAddress(1), LogicalBlockAddress(buffers_manager.kBufferCnt)), buffers_manager.GetRefOfBuffers()).IsOk());
         assert(buffers_manager.CheckBuffers(30).IsOk());
     }
 
 private:
-    BlockStorageInterface<GenericBlockBuffer> &storage_;
+    BlockStorageContainerInterface<BlockBuffer> &container_;
 };
 
 static void memblock_storage()
 {
     START_TEST;
-    MemBlockStorage storage;
-    BlockStorageTester tester(storage);
+    MemBlockStorageContainer container;
+    BlockStorageTester<GenericBlockBuffer> tester(container);
     tester.Open();
     tester.Write();
     tester.Read();
@@ -312,24 +360,21 @@ static void cache()
     assert(checker.ReadFromCache(LogicalBlockAddress(2), kSignature3).IsOk());
 }
 
-static void file_block_storage()
+template <class BlockBuffer, class BlockStorageContainer>
+static void persistent_block_storage()
 {
     START_TEST;
-    File file;
-    file.Init();
+    BlockStorageContainer container;
     {
-        FileBlockStorage storage(file.fname_);
-        BlockStorageTester tester(storage);
+        BlockStorageTester<BlockBuffer> tester(container);
         tester.Open();
         tester.Write();
     }
     {
-        FileBlockStorage storage(file.fname_);
-        BlockStorageTester tester(storage);
+        BlockStorageTester<BlockBuffer> tester(container);
         tester.Open();
         tester.Read();
     }
-    file.Cleanup();
 }
 
 int main()
@@ -339,6 +384,7 @@ int main()
     check_region_overlapped();
     multiplier();
     cache();
-    file_block_storage();
+    persistent_block_storage<GenericBlockBuffer, FileBlockStorageContainer>();
+    persistent_block_storage<GenericBlockBuffer, UnvmeBlockStorageContainer>();
     return 0;
 }

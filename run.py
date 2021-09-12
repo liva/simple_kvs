@@ -7,9 +7,13 @@ class Test:
     def __init__(self, env, source_files):
         self.env = env
         self.source_files = source_files
+        self.storage = UioNvme()
     def build_and_run(self, extra_option=''):
-        self.env.build("-Wall -g3 -O2 --std=c++11 {} -I. -o test/a.out {}".format(extra_option, self.source_files))
-        self.env.run_command("./test/a.out")
+        self.env.build("-Wall -g3 -O2 --std=c++11 {} -I. -o test/a.out {} -lunvme -lsysve".format(extra_option, self.source_files))
+        nvme.cleanup(UioNvme())
+        self.storage.setup()
+        self.env.run_command_with_sudo("./test/a.out")
+        self.storage.cleanup()
 
 
 conf = {
@@ -28,6 +32,7 @@ def main():
     Test(env, "test/iterator.cc").build_and_run()
     Test(env, "test/persistence.cc").build_and_run()
     Test(env, "test/performance_evaluation.cc").build_and_run('-DNDEBUG')
+    shell.call('cat output')
     #shell.call("docker run --rm -it -v $PWD:$PWD -w $PWD unvme:ve /opt/nec/nosupport/llvm-ve/bin/clang++ -g3 -O2 --target=ve-linux -static --std=c++11 -o main main.cc -L/opt/nec/nosupport/llvm-ve/lib/clang/10.0.0/lib/linux -lclang_rt.builtins-ve  -lpthread -lm -lc ")
     #shell.check_call("./main")
 

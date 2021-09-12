@@ -1,36 +1,85 @@
 #pragma once
 #include "kvs/simple_kvs.h"
+#include "kvs/linkedlist.h"
 #include "kvs/hash.h"
+#include "kvs/block_storage_kvs.h"
+#include "block_storage/unvme.h"
+#include "misc.h"
 
 using namespace HayaguiKvs;
-class HashKvsAllocator final : public KvsAllocatorInterface
+class HashKvsContainer final : public KvsContainerInterface
 {
 public:
-    virtual Kvs *Allocate() override
+    HashKvsContainer() : kvs_(8, kvs_allocator_, hash_calculator_) {}
+    virtual Kvs *operator->() override
     {
-        return new HashKvs(8, kvs_allocator_, hash_calculator_);
+        return &kvs_;
     }
-    virtual void Release(Kvs *kvs) override
+
+private:
+    class Allocator : public KvsAllocatorInterface
     {
-        delete kvs;
-    }
-    GenericKvsAllocator<SimpleKvs> kvs_allocator_;
+        virtual Kvs *Allocate() override
+        {
+            return new LinkedListKvs();
+        }
+    } kvs_allocator_;
     SimpleHashCalculator hash_calculator_;
+    HashKvs kvs_;
 };
 
-class Tester
+class BlockStoragKvsContainer final : public KvsContainerInterface
 {
 public:
-    Tester(KvsAllocatorInterface &kvs_allocator) : kvs_allocator_(kvs_allocator), kvs_(kvs_allocator_.Allocate())
+    BlockStoragKvsContainer()
+        : cache_kvs_(8, kvs_allocator_, hash_calculator_), kvs_(block_storage_, cache_kvs_) {}
+    virtual Kvs *operator->() override
     {
+        return &kvs_;
     }
-    virtual ~Tester()
-    {
-        kvs_allocator_.Release(kvs_);
-    }
-    virtual void Do() = 0;
 
-protected:
-    KvsAllocatorInterface &kvs_allocator_;
-    Kvs *kvs_;
+private:
+    class Allocator : public KvsAllocatorInterface
+    {
+        virtual Kvs *Allocate() override
+        {
+            return new LinkedListKvs();
+        }
+    } kvs_allocator_;
+    UnvmeBlockStorage block_storage_;
+    SimpleHashCalculator hash_calculator_;
+    HashKvs cache_kvs_;
+    BlockStorageKvs<GenericBlockBuffer> kvs_;
+};
+
+class BlockStoragKvsContainer1 final : public KvsContainerInterface
+{
+public:
+    BlockStoragKvsContainer1()
+        : kvs_(block_storage_, cache_kvs_) {}
+    virtual Kvs *operator->() override
+    {
+        return &kvs_;
+    }
+
+private:
+    UnvmeBlockStorage block_storage_;
+    SimpleKvs cache_kvs_;
+    BlockStorageKvs<GenericBlockBuffer> kvs_;
+};
+
+class BlockStoragKvsContainer2 final : public KvsContainerInterface
+{
+public:
+    BlockStoragKvsContainer2()
+        : kvs_(block_storage_, cache_kvs_) {}
+    virtual Kvs *operator->() override
+    {
+        return &kvs_;
+    }
+
+private:
+    UnvmeBlockStorage block_storage_;
+    LinkedListKvs cache_kvs_;
+    BlockStorageKvs<GenericBlockBuffer> kvs_;
 };
