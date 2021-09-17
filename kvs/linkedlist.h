@@ -11,22 +11,22 @@ namespace HayaguiKvs
         LinkedListKvs()
         {
         }
-        ~LinkedListKvs()
+        virtual ~LinkedListKvs() override
         {
         }
         LinkedListKvs(const LinkedListKvs &obj) = delete;
         LinkedListKvs &operator=(const LinkedListKvs &obj) = delete;
         virtual Status Get(ReadOptions options, const ConstSlice &key, SliceContainer &container) override
         {
-            return first_element_.GetNext().Get(key, container);
+            return first_element_.GetValueRecursivelyFromNext(key, container);
         }
         virtual Status Put(WriteOptions options, const ConstSlice &key, const ConstSlice &value) override
         {
-            return first_element_.PutNext(key, value);
+            return first_element_.PutValueRecursivelyFromNext(key, value);
         }
         virtual Status Delete(WriteOptions options, const ConstSlice &key) override
         {
-            return first_element_.DeleteNext(key);
+            return first_element_.DeleteValueRecursivelyFromNext(key);
         }
         virtual Optional<KvsEntryIterator> GetFirstIterator() override
         {
@@ -46,7 +46,7 @@ namespace HayaguiKvs
         }
         virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) override
         {
-            return first_element_.GetNext().FindNextKey(key, container);
+            return first_element_.FindSubsequentKeyRecursivelyFromNext(key, container);
         }
 
     private:
@@ -110,9 +110,9 @@ namespace HayaguiKvs
         class Container
         {
         public:
-            Container()
+            /*Container()
             {
-            }
+            }*/
             Container(Element *ele) : ele_(ele)
             {
             }
@@ -124,65 +124,25 @@ namespace HayaguiKvs
             {
                 return Container(ele_->GetNext());
             }
-            Status Get(const ConstSlice &key, SliceContainer &container)
+            Status GetValueRecursivelyFromNext(const ConstSlice &key, SliceContainer &container)
             {
-                if (!hasElement())
-                {
-                    return Status::CreateErrorStatus();
-                }
-                if (ele_->isKeyEqual(key))
-                {
-                    ele_->PutValueTo(container);
-                    return Status::CreateOkStatus();
-                }
-                return GetNext().Get(key, container);
+                GetProcessor processor(key, container);
+                return Walk(processor);
             }
-            Status PutNext(const ConstSlice &key, const ConstSlice &value)
+            Status PutValueRecursivelyFromNext(const ConstSlice &key, const ConstSlice &value)
             {
-                Container next = GetNext();
-                if (!next.hasElement())
-                {
-                    InsertNext(key, value);
-                    return Status::CreateOkStatus();
-                }
-                if (next.ele_->isKeyEqual(key))
-                {
-                    DeleteNext();
-                    InsertNext(key, value);
-                    return Status::CreateOkStatus();
-                }
-                if (next.ele_->isKeyGreater(key))
-                {
-                    InsertNext(key, value);
-                    return Status::CreateOkStatus();
-                }
-                return next.PutNext(key, value);
+                PutProcessor processor(key, value);
+                return Walk(processor);
             }
-            Status DeleteNext(const ConstSlice &key)
+            Status DeleteValueRecursivelyFromNext(const ConstSlice &key)
             {
-                Container next = GetNext();
-                if (!next.hasElement())
-                {
-                    return Status::CreateErrorStatus();
-                }
-                if (next.ele_->isKeyEqual(key))
-                {
-                    DeleteNext();
-                    return Status::CreateOkStatus();
-                }
-                return next.DeleteNext(key);
+                DeleteProcessor processor(key);
+                return Walk(processor);
             }
-            Status FindNextKey(const ConstSlice &key, SliceContainer &container)
+            Status FindSubsequentKeyRecursivelyFromNext(const ConstSlice &key, SliceContainer &container)
             {
-                if (!hasElement())
-                {
-                    return Status::CreateErrorStatus();
-                }
-                if (ele_->isKeyEqual(key))
-                {
-                    return GetNext().GetKey(container);
-                }
-                return FindNextKey(key, container);
+                FindNextKeyProcessor processor(key, container);
+                return Walk(processor);
             }
             Status GetKey(SliceContainer &container)
             {
@@ -200,6 +160,147 @@ namespace HayaguiKvs
             }
 
         private:
+            struct ProcessorInterface
+            {
+                virtual const ConstSlice &GetKey() = 0;
+                virtual Status ProcessTheCaseOfNoMoreEntries(Container &prev) = 0;
+                virtual Status ProcessTheCaseOfNextEqualsToTheKey(Container &prev) = 0;
+                virtual Status ProcessTheCaseOfNextGreaterThanTheKey(Container &prev) = 0;
+            };
+            class DeleteProcessor : public ProcessorInterface
+            {
+            public:
+                DeleteProcessor() = delete;
+                DeleteProcessor(const ConstSlice &key)
+                    : key_(key)
+                {
+                }
+                virtual const ConstSlice &GetKey() override
+                {
+                    return key_;
+                }
+                virtual Status ProcessTheCaseOfNoMoreEntries(Container &prev) override
+                {
+                    return Status::CreateErrorStatus();
+                }
+                virtual Status ProcessTheCaseOfNextEqualsToTheKey(Container &prev) override
+                {
+                    prev.DeleteNext();
+                    return Status::CreateOkStatus();
+                }
+                virtual Status ProcessTheCaseOfNextGreaterThanTheKey(Container &prev) override
+                {
+                    return Status::CreateErrorStatus();
+                }
+            private:
+                const ConstSlice &key_;
+            };
+            class PutProcessor : public ProcessorInterface
+            {
+            public:
+                PutProcessor() = delete;
+                PutProcessor(const ConstSlice &key, const ConstSlice &value)
+                    : key_(key), value_(value)
+                {
+                }
+                virtual const ConstSlice &GetKey() override
+                {
+                    return key_;
+                }
+                virtual Status ProcessTheCaseOfNoMoreEntries(Container &prev) override
+                {
+                    prev.InsertNext(key_, value_);
+                    return Status::CreateOkStatus();
+                }
+                virtual Status ProcessTheCaseOfNextEqualsToTheKey(Container &prev) override
+                {
+                    prev.DeleteNext();
+                    prev.InsertNext(key_, value_);
+                    return Status::CreateOkStatus();
+                }
+                virtual Status ProcessTheCaseOfNextGreaterThanTheKey(Container &prev) override
+                {
+                    prev.InsertNext(key_, value_);
+                    return Status::CreateOkStatus();
+                }
+            private:
+                const ConstSlice &key_;
+                const ConstSlice &value_;
+            };
+            class GetProcessor : public ProcessorInterface
+            {
+            public:
+                GetProcessor() = delete;
+                GetProcessor(const ConstSlice &key, SliceContainer &container)
+                    : key_(key), container_(container)
+                {
+                }
+                virtual const ConstSlice &GetKey() override
+                {
+                    return key_;
+                }
+                virtual Status ProcessTheCaseOfNoMoreEntries(Container &prev) override
+                {
+                    return Status::CreateErrorStatus();
+                }
+                virtual Status ProcessTheCaseOfNextEqualsToTheKey(Container &prev) override
+                {
+                    prev.GetNext().ele_->PutValueTo(container_);
+                    return Status::CreateOkStatus();
+                }
+                virtual Status ProcessTheCaseOfNextGreaterThanTheKey(Container &prev) override
+                {
+                    return Status::CreateErrorStatus();
+                }
+            private:
+                const ConstSlice &key_;
+                SliceContainer &container_;
+            };
+            class FindNextKeyProcessor : public ProcessorInterface
+            {
+            public:
+                FindNextKeyProcessor() = delete;
+                FindNextKeyProcessor(const ConstSlice &key, SliceContainer &container)
+                    : key_(key), container_(container)
+                {
+                }
+                virtual const ConstSlice &GetKey() override
+                {
+                    return key_;
+                }
+                virtual Status ProcessTheCaseOfNoMoreEntries(Container &prev) override
+                {
+                    return Status::CreateErrorStatus();
+                }
+                virtual Status ProcessTheCaseOfNextEqualsToTheKey(Container &prev) override
+                {
+                    return prev.GetNext().GetNext().GetKey(container_);
+                }
+                virtual Status ProcessTheCaseOfNextGreaterThanTheKey(Container &prev) override
+                {
+                    return prev.GetNext().GetKey(container_);
+                }
+            private:
+                const ConstSlice &key_;
+                SliceContainer &container_;
+            };
+            Status Walk(ProcessorInterface &processor)
+            {
+                Container next = GetNext();
+                if (!next.hasElement())
+                {
+                    return processor.ProcessTheCaseOfNoMoreEntries(*this);
+                }
+                if (next.ele_->isKeyEqual(processor.GetKey()))
+                {
+                    return processor.ProcessTheCaseOfNextEqualsToTheKey(*this);
+                }
+                if (next.ele_->isKeyGreater(processor.GetKey()))
+                {
+                    return processor.ProcessTheCaseOfNextGreaterThanTheKey(*this);
+                }
+                return next.Walk(processor);
+            }
             void DeleteNext()
             {
                 Container next = GetNext();
@@ -224,7 +325,7 @@ namespace HayaguiKvs
                 ele->~Element();
                 MemAllocator::free(ele);
             }
-            void SetElement(Element *ele)
+            /*void SetElement(Element *ele)
             {
                 if (ele_ != nullptr)
                 {
@@ -232,8 +333,8 @@ namespace HayaguiKvs
                     DeleteElement(ele_);
                 }
                 ele_ = ele;
-            }
-            Element *ele_ = nullptr;
+            }*/
+            Element *const ele_;
         };
         Container first_element_ = Container::CreateDummy();
     };

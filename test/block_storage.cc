@@ -4,11 +4,13 @@
 #include "block_storage/block_storage_multiplier.h"
 #include "block_storage/block_storage_with_cache.h"
 #include "block_storage/unvme.h"
+#include "block_storage/vefs.h"
 #include "./test.h"
 #include "misc.h"
 #include "test_storage.h"
 #include <memory>
 #include <vector>
+#include <typeinfo>
 std::vector<int> dummy;
 
 using namespace HayaguiKvs;
@@ -155,6 +157,21 @@ public:
 
 private:
     UnvmeBlockStorage block_storage_;
+};
+
+
+class VefsBlockStorageContainer final : public BlockStorageContainerInterface<GenericBlockBuffer>
+{
+public:
+    VefsBlockStorageContainer() : block_storage_(file.fname_) {}
+    virtual BlockStorageInterface<GenericBlockBuffer> *operator->() override
+    {
+        return &block_storage_;
+    }
+
+private:
+    VefsFile file;
+    VefsBlockStorage block_storage_;
 };
 
 template <class BlockBuffer>
@@ -363,7 +380,7 @@ static void cache()
 template <class BlockBuffer, class BlockStorageContainer>
 static void persistent_block_storage()
 {
-    START_TEST;
+    START_TEST_WITH_POSTFIX(typeid(BlockStorageContainer).name());
     BlockStorageContainer container;
     {
         BlockStorageTester<BlockBuffer> tester(container);
@@ -386,5 +403,6 @@ int main()
     cache();
     persistent_block_storage<GenericBlockBuffer, FileBlockStorageContainer>();
     persistent_block_storage<GenericBlockBuffer, UnvmeBlockStorageContainer>();
+    persistent_block_storage<GenericBlockBuffer, VefsBlockStorageContainer>();
     return 0;
 }

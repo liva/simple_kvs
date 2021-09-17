@@ -1,9 +1,13 @@
 #pragma once
 #include "kvs/simple_kvs.h"
 #include "kvs/linkedlist.h"
+#include "kvs/skiplist.h"
 #include "kvs/hash.h"
-#include "kvs/block_storage_kvs.h"
+#include "kvs/char_storage_kvs.h"
+#include "char_storage/char_storage_over_blockstorage.h"
+#include "char_storage/vefs.h"
 #include "block_storage/unvme.h"
+#include "block_storage/vefs.h"
 #include "misc.h"
 
 using namespace HayaguiKvs;
@@ -32,7 +36,7 @@ class BlockStoragKvsContainer final : public KvsContainerInterface
 {
 public:
     BlockStoragKvsContainer()
-        : cache_kvs_(8, kvs_allocator_, hash_calculator_), kvs_(block_storage_, cache_kvs_) {}
+        : block_storage_(file_.fname_), cache_kvs_(8, kvs_allocator_, hash_calculator_), char_storage_(block_storage_), kvs_(char_storage_, cache_kvs_) {}
     virtual Kvs *operator->() override
     {
         return &kvs_;
@@ -46,40 +50,34 @@ private:
             return new LinkedListKvs();
         }
     } kvs_allocator_;
-    UnvmeBlockStorage block_storage_;
+    VefsFile file_;
+    VefsBlockStorage block_storage_;
     SimpleHashCalculator hash_calculator_;
     HashKvs cache_kvs_;
-    BlockStorageKvs<GenericBlockBuffer> kvs_;
+    AppendOnlyCharStorageOverBlockStorage<GenericBlockBuffer> char_storage_;
+    CharStorageKvs kvs_;
 };
 
-class BlockStoragKvsContainer1 final : public KvsContainerInterface
+class CharStorageKvsContainer final : public KvsContainerInterface
 {
 public:
-    BlockStoragKvsContainer1()
-        : kvs_(block_storage_, cache_kvs_) {}
+    CharStorageKvsContainer()
+        : char_storage_(file_.fname_), kvs_(char_storage_, cache_kvs_) {}
     virtual Kvs *operator->() override
     {
         return &kvs_;
     }
 
 private:
-    UnvmeBlockStorage block_storage_;
-    SimpleKvs cache_kvs_;
-    BlockStorageKvs<GenericBlockBuffer> kvs_;
-};
-
-class BlockStoragKvsContainer2 final : public KvsContainerInterface
-{
-public:
-    BlockStoragKvsContainer2()
-        : kvs_(block_storage_, cache_kvs_) {}
-    virtual Kvs *operator->() override
+    class Allocator : public KvsAllocatorInterface
     {
-        return &kvs_;
-    }
-
-private:
-    UnvmeBlockStorage block_storage_;
-    LinkedListKvs cache_kvs_;
-    BlockStorageKvs<GenericBlockBuffer> kvs_;
+        virtual Kvs *Allocate() override
+        {
+            return new LinkedListKvs();
+        }
+    } kvs_allocator_;
+    VefsFile file_;
+    VefsCharStorage char_storage_;
+    SkipListKvs<4> cache_kvs_;
+    CharStorageKvs kvs_;
 };

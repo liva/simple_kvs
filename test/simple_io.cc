@@ -1,5 +1,3 @@
-#include "kvs/simple_kvs.h"
-#include "kvs/hash.h"
 #include "./test.h"
 #include "./kvs_misc.h"
 #include <assert.h>
@@ -20,6 +18,7 @@ public:
         SliceContainer container;
         assert(kvs_container_->Get(ReadOptions(), key, container).IsError());
     }
+
 private:
     KvsContainerInterface &kvs_container_;
 };
@@ -41,6 +40,7 @@ public:
         assert(kvs_container_->Get(ReadOptions(), key2, container).IsOk());
         assert(container.DoesMatch(value1));
     }
+
 private:
     KvsContainerInterface &kvs_container_;
 };
@@ -63,6 +63,7 @@ public:
         assert(kvs_container_->Get(ReadOptions(), key, container).IsOk());
         assert(container.DoesMatch(value2));
     }
+
 private:
     KvsContainerInterface &kvs_container_;
 };
@@ -85,6 +86,7 @@ public:
         SliceContainer container;
         assert(kvs_container_->Get(ReadOptions(), key3, container).IsError());
     }
+
 private:
     KvsContainerInterface &kvs_container_;
 };
@@ -115,6 +117,7 @@ public:
         assert(kvs_container_->Get(ReadOptions(), key3, container).IsOk());
         assert(container.DoesMatch(value3));
     }
+
 private:
     KvsContainerInterface &kvs_container_;
 };
@@ -145,13 +148,77 @@ public:
         assert(kvs_container_->Get(ReadOptions(), key3, container).IsOk());
         assert(container.DoesMatch(value3));
     }
+
 private:
     KvsContainerInterface &kvs_container_;
 };
 
-template<class KvsContainer>
+class MixedQueriesTester
+{
+public:
+    MixedQueriesTester(KvsContainerInterface &kvs_container) : kvs_container_(kvs_container)
+    {
+    }
+    void Do()
+    {
+        START_TEST;
+        for (int i = 0; i < 200; i++)
+        {
+            char buf1[5], buf2[5];
+            sprintf(buf1, "%04d", (i % 4) * 1000 + i);
+            sprintf(buf2, "%04d", i);
+            assert(kvs_container_->Put(WriteOptions(), ConstSlice(buf1, 4), ConstSlice(buf2, 4)).IsOk());
+        }
+        for (int i = 0; i < 10; i++)
+        {
+            const int j = i * 20;
+            char buf[5];
+            sprintf(buf, "%04d", (j % 4) * 1000 + j);
+            assert(kvs_container_->Delete(WriteOptions(), ConstSlice(buf, 4)).IsOk());
+        }
+        for (int i = 0; i < 10; i++)
+        {
+            const int j = i * 20 + 1;
+            char buf1[5], buf2[5];
+            sprintf(buf1, "%04d", (j % 4) * 1000 + j);
+            sprintf(buf2, "%04d", j + 1);
+            assert(kvs_container_->Put(WriteOptions(), ConstSlice(buf1, 4), ConstSlice(buf2, 4)).IsOk());
+        }
+        for (int i = 0; i < 200; i++)
+        {
+            char buf1[5];
+            sprintf(buf1, "%04d", (i % 4) * 1000 + i);
+            ConstSlice key(buf1, 4);
+            SliceContainer container;
+            if ((i % 20) == 0)
+            {
+                assert(kvs_container_->Get(ReadOptions(), key, container).IsError());
+            }
+            else if ((i % 20) == 1)
+            {
+                char buf2[5];
+                sprintf(buf2, "%04d", i + 1);
+                assert(kvs_container_->Get(ReadOptions(), key, container).IsOk());
+                assert(container.DoesMatch(ConstSlice(buf2, 4)));
+            }
+            else
+            {
+                char buf2[5];
+                sprintf(buf2, "%04d", i);
+                assert(kvs_container_->Get(ReadOptions(), key, container).IsOk());
+                assert(container.DoesMatch(ConstSlice(buf2, 4)));
+            }
+        }
+    }
+
+private:
+    KvsContainerInterface &kvs_container_;
+};
+
+template <class KvsContainer>
 static void test()
 {
+    START_TEST_WITH_POSTFIX(typeid(KvsContainer).name());
     {
         KvsContainer kvs_container;
         ReadWithoutWriteTester tester(kvs_container);
@@ -182,6 +249,11 @@ static void test()
         WriteUnsortedOrderTester tester(kvs_container);
         tester.Do();
     }
+    {
+        KvsContainer kvs_container;
+        MixedQueriesTester tester(kvs_container);
+        tester.Do();
+    }
 }
 
 int main()
@@ -189,5 +261,6 @@ int main()
     test<GenericKvsContainer<SimpleKvs>>();
     test<GenericKvsContainer<LinkedListKvs>>();
     test<HashKvsContainer>();
+    test<GenericKvsContainer<SkipListKvs<4>>>();
     return 0;
 }

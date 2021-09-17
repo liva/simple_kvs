@@ -1,20 +1,18 @@
 #pragma once
 #include "kvs_interface.h"
-#include "block_storage/block_storage_interface.h"
 #include "kvs/simple_kvs.h"
-#include "log.h"
-#include "appendonly_storage.h"
+#include "char_storage/log.h"
+#include "char_storage/interface.h"
+#include "utils/multipleslice_container.h"
 
 namespace HayaguiKvs
 {
-    template <class BlockBuffer>
-    class BlockStorageKvs final : public Kvs
+    class CharStorageKvs final : public Kvs
     {
     public:
-        BlockStorageKvs() = delete;
-        BlockStorageKvs(BlockStorageInterface<BlockBuffer> &underlying_storage, Kvs &cache_kvs)
-            : underlying_storage_(underlying_storage),
-              char_storage_(underlying_storage),
+        CharStorageKvs() = delete;
+        CharStorageKvs(AppendOnlyCharStorageInterface &char_storage, Kvs &cache_kvs)
+            : char_storage_(char_storage),
               log_(char_storage_),
               cache_kvs_(cache_kvs)
         {
@@ -24,9 +22,9 @@ namespace HayaguiKvs
             }
             RecoverFromStorage();
         }
-        BlockStorageKvs(const BlockStorageKvs &obj) = delete;
-        BlockStorageKvs &operator=(const BlockStorageKvs &obj) = delete;
-        virtual ~BlockStorageKvs()
+        CharStorageKvs(const CharStorageKvs &obj) = delete;
+        CharStorageKvs &operator=(const CharStorageKvs &obj) = delete;
+        virtual ~CharStorageKvs()
         {
         }
         virtual Status Get(ReadOptions options, const ConstSlice &key, SliceContainer &container) override
@@ -35,15 +33,12 @@ namespace HayaguiKvs
         }
         virtual Status Put(WriteOptions options, const ConstSlice &key, const ConstSlice &value) override
         {
-            if (Signature::StorePutSignature(log_).IsError())
-            {
-                return Status::CreateErrorStatus();
-            }
-            if (log_.AppendEntry(key).IsError())
-            {
-                return Status::CreateErrorStatus();
-            }
-            if (log_.AppendEntry(value).IsError())
+            MultipleValidSliceContainer<3> container;
+            ConstSlice signature = Signature::CreatePutSignature();
+            container.Set(&signature);
+            container.Set(&key);
+            container.Set(&value);
+            if (log_.AppendEntries(container).IsError())
             {
                 return Status::CreateErrorStatus();
             }
@@ -64,7 +59,8 @@ namespace HayaguiKvs
         virtual Optional<KvsEntryIterator> GetFirstIterator() override
         {
             Optional<KvsEntryIterator> cache_iter = cache_kvs_.GetFirstIterator();
-            if (!cache_iter.isPresent()) {
+            if (!cache_iter.isPresent())
+            {
                 return Optional<KvsEntryIterator>::CreateInvalidObj();
             }
             SliceContainer key_container;
@@ -78,7 +74,8 @@ namespace HayaguiKvs
             new (base) GenericKvsEntryIteratorBase(*this, key);
             return KvsEntryIterator(base);
         }
-        virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) override {
+        virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) override
+        {
             return cache_kvs_.FindNextKey(key, container);
         }
 
@@ -105,7 +102,8 @@ namespace HayaguiKvs
                     {
                         abort();
                     }
-                    if (cache_kvs_.Put(WriteOptions(), key_container.CreateConstSlice(), value_container.CreateConstSlice()).IsError()) {
+                    if (cache_kvs_.Put(WriteOptions(), key_container.CreateConstSlice(), value_container.CreateConstSlice()).IsError())
+                    {
                         abort();
                     }
                 }
@@ -116,7 +114,8 @@ namespace HayaguiKvs
                     {
                         abort();
                     }
-                    if (cache_kvs_.Delete(WriteOptions(), key_container.CreateConstSlice()).IsError()) {
+                    if (cache_kvs_.Delete(WriteOptions(), key_container.CreateConstSlice()).IsError())
+                    {
                         abort();
                     }
                 }
@@ -139,8 +138,7 @@ namespace HayaguiKvs
             return log.RetrieveNextEntry(key_container);
         }
 
-        BlockStorageInterface<BlockBuffer> &underlying_storage_;
-        AppendOnlyCharStorage<BlockBuffer> char_storage_;
+        AppendOnlyCharStorageInterface &char_storage_;
         LogAppender log_;
         Kvs &cache_kvs_;
 
@@ -153,11 +151,10 @@ namespace HayaguiKvs
                 ConstSlice signature((const char *)&value, 1);
                 return log.AppendEntry(signature);
             }
-            static Status StorePutSignature(LogAppender &log)
+            static ConstSlice CreatePutSignature()
             {
                 const uint8_t value = kSignaturePut;
-                ConstSlice signature((const char *)&value, 1);
-                return log.AppendEntry(signature);
+                return ConstSlice((const char *)&value, 1);
             }
             static Status RetrieveSignature(LogReader &log, uint8_t &signature)
             {
@@ -167,7 +164,8 @@ namespace HayaguiKvs
                     return Status::CreateErrorStatus();
                 }
                 int len;
-                if (signature_container.GetLen(len).IsError()) {
+                if (signature_container.GetLen(len).IsError())
+                {
                     return Status::CreateErrorStatus();
                 }
                 if (len != 1)

@@ -1,8 +1,9 @@
 #pragma once
-#include "appendonly_storage.h"
+#include "char_storage/interface.h"
 #include "utils/allocator.h"
 #include "utils/slice.h"
 #include "utils/optional.h"
+#include "utils/multipleslice_container.h"
 #include <string.h>
 #include <stdint.h>
 
@@ -90,6 +91,11 @@ namespace HayaguiKvs
         {
             return char_storage_.Open();
         }
+        Status AppendEntries(MultipleValidSliceContainerInterface &multiple_slice_container)
+        {
+            const ValidSlice *slices[multiple_slice_container.GetLen() * 2];
+            return AppendEntriesSub(slices, 0, multiple_slice_container);
+        }
         Status AppendEntry(const ValidSlice &obj)
         {
             UnsignedInt64ForLogInfo len(obj.GetLen());
@@ -101,6 +107,24 @@ namespace HayaguiKvs
         }
 
     private:
+        Status AppendEntriesSub(const ValidSlice **slices, const int index, MultipleValidSliceContainerInterface &multiple_slice_container)
+        {
+            const ValidSlice *slice = multiple_slice_container.Get();
+            UnsignedInt64ForLogInfo len(slice->GetLen());
+            ConstSlice len_slice = len.CreateConstSlice();
+            slices[index * 2] = &len_slice;
+            slices[index * 2 + 1] = slice;
+            const int slice_count = multiple_slice_container.GetLen();
+            if (index + 1 == slice_count)
+            {
+                ConstSlice concatinated_slice = ConstSlice::CreateConstSliceFromSlices(slices, slice_count * 2);
+                return char_storage_.Append(concatinated_slice);
+            }
+            else
+            {
+                return AppendEntriesSub(slices, index + 1, multiple_slice_container);
+            }
+        }
         AppendCharStorageInterface &char_storage_;
     };
 }

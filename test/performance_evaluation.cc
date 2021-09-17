@@ -8,33 +8,6 @@
 
 using namespace HayaguiKvs;
 
-class TimeTaker
-{
-public:
-    TimeTaker(const char *const string) : time_taker_(string)
-    {
-    }
-    ~TimeTaker()
-    {
-        time_taker_.PrintMeasuredTime();
-    }
-
-private:
-    class TimeTakerInternal final : public VeRtcTaker
-    {
-    public:
-        TimeTakerInternal(const char *const string) : string_(string)
-        {
-        }
-        virtual void Print(uint64_t time) override
-        {
-            printf(">>%s %luns\n", string_, time);
-        }
-        const char *const string_;
-    };
-    TimeTakerInternal time_taker_;
-};
-
 static inline void memallocator_performance()
 {
     char *buf;
@@ -56,10 +29,10 @@ static inline void memallocator_performance()
     }
 }
 
-class SingleShotPerformanceTester
+class SingleShotPerformanceMeasurer
 {
 public:
-    SingleShotPerformanceTester(KvsContainerInterface &kvs_container) : kvs_container_(kvs_container)
+    SingleShotPerformanceMeasurer(KvsContainerInterface &kvs_container) : kvs_container_(kvs_container)
     {
     }
     void Do()
@@ -98,38 +71,104 @@ private:
     KvsContainerInterface &kvs_container_;
 };
 
+class TimeComplexityMeasurer
+{
+public:
+    TimeComplexityMeasurer(KvsContainerInterface &kvs_container) : kvs_container_(kvs_container)
+    {
+    }
+    void Do()
+    {
+        START_TEST;
+        for (int i = 0; i < 8; i++)
+        {
+            MeasurePut(i);
+            MeasureGet(i);
+        }
+    }
+
+private:
+    class OneRequestTimeTaker
+    {
+    public:
+        OneRequestTimeTaker(const char *const string) : time_taker_(string)
+        {
+        }
+        ~OneRequestTimeTaker()
+        {
+            time_taker_.PrintMeasuredTime();
+        }
+
+    private:
+        class TimeTakerInternal final : public VeRtcTaker
+        {
+        public:
+            TimeTakerInternal(const char *const string) : string_(string)
+            {
+            }
+            virtual void Print(uint64_t time) override
+            {
+                printf(">>%s %luns\n", string_, time / kRequestNumPerMeasure);
+            }
+            const char *const string_;
+        };
+        TimeTakerInternal time_taker_;
+    };
+    void MeasurePut(const int count)
+    {
+        OneRequestTimeTaker time_taker("Put");
+        for (int i = count * kRequestNumPerMeasure; i < (count + 1) * kRequestNumPerMeasure; i++)
+        {
+            char buf[5];
+            sprintf(buf, "%04d", i);
+            if (kvs_container_->Put(WriteOptions(), ConstSlice(buf, 4), ConstSlice(buf, 4)).IsError())
+            {
+                abort();
+            }
+        }
+    }
+    void MeasureGet(const int count)
+    {
+        OneRequestTimeTaker time_taker("Get");
+        for (int i = count * kRequestNumPerMeasure; i < (count + 1) * kRequestNumPerMeasure; i++)
+        {
+            char buf[5];
+            sprintf(buf, "%04d", i);
+            SliceContainer container;
+            if (kvs_container_->Get(ReadOptions(), ConstSlice(buf, 4), container).IsError())
+            {
+                abort();
+            }
+        }
+    }
+    static const int kRequestNumPerMeasure = 500;
+    KvsContainerInterface &kvs_container_;
+};
+
+template <class KvsContainer>
+static void test()
+{
+    START_TEST_WITH_POSTFIX(typeid(KvsContainer).name());
+    {
+        KvsContainer kvs_container;
+        SingleShotPerformanceMeasurer tester(kvs_container);
+        tester.Do();
+        tester.Do();
+    }
+    {
+        KvsContainer kvs_container;
+        TimeComplexityMeasurer tester(kvs_container);
+        tester.Do();
+    }
+}
+
 int main()
 {
     memallocator_performance();
-    {
-        GenericKvsContainer<SimpleKvs> kvs_container;
-        SingleShotPerformanceTester tester(kvs_container);
-        tester.Do();
-    }
-    {
-        GenericKvsContainer<LinkedListKvs> kvs_container;
-        SingleShotPerformanceTester tester(kvs_container);
-        tester.Do();
-    }
-    {
-        HashKvsContainer kvs_container;
-        SingleShotPerformanceTester tester(kvs_container);
-        tester.Do();
-    }
-    {
-        BlockStoragKvsContainer1 kvs_container;
-        SingleShotPerformanceTester tester(kvs_container);
-        tester.Do();
-    }
-    {
-        BlockStoragKvsContainer2 kvs_container;
-        SingleShotPerformanceTester tester(kvs_container);
-        tester.Do();
-    }
-    {
-        BlockStoragKvsContainer kvs_container;
-        SingleShotPerformanceTester tester(kvs_container);
-        tester.Do();
-    }
+    test<GenericKvsContainer<SimpleKvs>>();
+    test<GenericKvsContainer<LinkedListKvs>>();
+    test<HashKvsContainer>();
+    test<GenericKvsContainer<SkipListKvs<4>>>();
+    test<CharStorageKvsContainer>();
     return 0;
 }

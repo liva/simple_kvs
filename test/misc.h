@@ -2,6 +2,7 @@
 #include "utils/slice.h"
 #include <unistd.h>
 #include <stdio.h>
+#include <vefs.h>
 
 using namespace HayaguiKvs;
 
@@ -31,4 +32,24 @@ public:
         remove(fname_);
     }
     static constexpr const char *const fname_ = "storage_file";
+};
+
+class VefsFile
+{
+public:
+    VefsFile(): vefs_(Vefs::Get())
+    {
+        if (vefs_->DoesExist(std::string(fname_)))
+        {
+            vefs_->Delete(vefs_->Create(std::string(fname_), false));
+        }
+    }
+    ~VefsFile()
+    {
+        vefs_->Delete(vefs_->Create(std::string(fname_), false));
+    }
+    static constexpr const char *const fname_ = "/storage_file";
+
+private:
+    Vefs *vefs_;
 };

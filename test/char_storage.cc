@@ -1,6 +1,7 @@
-#include "appendonly_storage.h"
 #include "block_storage/memblock_storage.h"
-#include "log.h"
+#include "char_storage/char_storage_over_blockstorage.h"
+#include "char_storage/vefs.h"
+#include "char_storage/log.h"
 #include "./test.h"
 #include "test_storage.h"
 #include "misc.h"
@@ -10,22 +11,20 @@ std::vector<int> dummy;
 
 using namespace HayaguiKvs;
 
-static void append_only_storage()
+static void append_only_storage(AppendOnlyCharStorageInterface &char_storage)
 {
     START_TEST;
-    MemBlockStorage block_storage;
     {
-        AppendOnlyCharStorage<GenericBlockBuffer> append_only_storage(block_storage);
-        assert(append_only_storage.Open().IsOk());
+        assert(char_storage.Open().IsOk());
         for (char c = 'A'; c <= 'Z'; c++)
         {
             int cnt = ('Z' - c) * 10;
             ConstSlice slice = CreateSliceFromChar(c, cnt);
-            size_t prev_len = append_only_storage.GetLen();
-            assert(append_only_storage.Append(slice).IsOk());
-            assert(append_only_storage.GetLen() == prev_len + cnt);
+            size_t prev_len = char_storage.GetLen();
+            assert(char_storage.Append(slice).IsOk());
+            assert(char_storage.GetLen() == prev_len + cnt);
         }
-        SequentialReadCharStorageOverRandomReadCharStorage sequential_read_storage(append_only_storage);
+        SequentialReadCharStorageOverRandomReadCharStorage sequential_read_storage(char_storage);
         assert(sequential_read_storage.Open().IsOk());
         for (char c = 'A'; c <= 'Z'; c++)
         {
@@ -40,8 +39,7 @@ static void append_only_storage()
         }
     }
     {
-        AppendOnlyCharStorage<GenericBlockBuffer> append_only_storage(block_storage);
-        SequentialReadCharStorageOverRandomReadCharStorage sequential_read_storage(append_only_storage);
+        SequentialReadCharStorageOverRandomReadCharStorage sequential_read_storage(char_storage);
         assert(sequential_read_storage.Open().IsOk());
         for (char c = 'A'; c <= 'Z'; c++)
         {
@@ -61,7 +59,7 @@ static void check_cache_of_append_only_storage()
 {
     START_TEST;
     TestStorage block_storage;
-    AppendOnlyCharStorage<GenericBlockBuffer> append_only_storage(block_storage);
+    AppendOnlyCharStorageOverBlockStorage<GenericBlockBuffer> append_only_storage(block_storage);
     assert(append_only_storage.Open().IsOk());
     block_storage.ResetCnt();
 
@@ -87,7 +85,7 @@ static void log()
     MemBlockStorage block_storage;
     ConstSlice slice1("abcdefg", 7);
     ConstSlice slice2("0123456789", 10);
-    AppendOnlyCharStorage<GenericBlockBuffer> append_only_char_storage(block_storage);
+    AppendOnlyCharStorageOverBlockStorage<GenericBlockBuffer> append_only_char_storage(block_storage);
     {
         LogAppender log_appender(append_only_char_storage);
         assert(log_appender.Open().IsOk());
@@ -123,7 +121,16 @@ static void log()
 
 int main()
 {
-    append_only_storage();
+    {
+        MemBlockStorage block_storage;
+        AppendOnlyCharStorageOverBlockStorage<GenericBlockBuffer> char_storage(block_storage);
+        append_only_storage(char_storage);
+    }
+    {
+        VefsFile file;
+        VefsCharStorage char_storage(file.fname_);
+        append_only_storage(char_storage);
+    }
     check_cache_of_append_only_storage();
     log();
     return 0;

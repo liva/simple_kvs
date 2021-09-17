@@ -344,6 +344,7 @@ int main()
 {
     test<GenericKvsContainer<SimpleKvs>>();
     test<GenericKvsContainer<LinkedListKvs>>();
+    test<GenericKvsContainer<SkipListKvs<4>>>();
     test<HashKvsContainer>();
     return 0;
 }

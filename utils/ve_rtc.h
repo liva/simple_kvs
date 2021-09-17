@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stdio.h>
 
 class VeRtcTaker
 {
@@ -31,4 +32,32 @@ protected:
 
 private:
     const uint64_t x_;
+};
+
+
+class TimeTaker
+{
+public:
+    TimeTaker(const char *const string) : time_taker_(string)
+    {
+    }
+    ~TimeTaker()
+    {
+        time_taker_.PrintMeasuredTime();
+    }
+
+private:
+    class TimeTakerInternal final : public VeRtcTaker
+    {
+    public:
+        TimeTakerInternal(const char *const string) : string_(string)
+        {
+        }
+        virtual void Print(uint64_t time) override
+        {
+            printf(">>%s %luns\n", string_, time);
+        }
+        const char *const string_;
+    };
+    TimeTakerInternal time_taker_;
 };

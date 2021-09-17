@@ -1,7 +1,8 @@
 #include "kvs/hierarchical_kvs.h"
 #include "kvs/simple_kvs.h"
 #include "kvs/linkedlist.h"
-#include "kvs/block_storage_kvs.h"
+#include "kvs/char_storage_kvs.h"
+#include "char_storage/char_storage_over_blockstorage.h"
 #include "block_storage/memblock_storage.h"
 #include "block_storage/file_block_storage.h"
 #include "./test.h"
@@ -66,13 +67,15 @@ static inline void recover_from_block_storage()
     Tester tester;
     {
         SimpleKvs cache_kvs;
-        BlockStorageKvs<GenericBlockBuffer> block_storage_kvs(block_storage, cache_kvs);
-        tester.Write(block_storage_kvs);
+        AppendOnlyCharStorageOverBlockStorage<GenericBlockBuffer> char_storage(block_storage);
+        CharStorageKvs char_storage_kvs(char_storage, cache_kvs);
+        tester.Write(char_storage_kvs);
     }
     {
         SimpleKvs cache_kvs;
-        BlockStorageKvs<GenericBlockBuffer> block_storage_kvs(block_storage, cache_kvs);
-        tester.Read(block_storage_kvs);
+        AppendOnlyCharStorageOverBlockStorage<GenericBlockBuffer> char_storage(block_storage);
+        CharStorageKvs char_storage_kvs(char_storage, cache_kvs);
+        tester.Read(char_storage_kvs);
     }
 }
 
@@ -85,14 +88,16 @@ static inline void recover_from_file()
     {
         FileBlockStorage block_storage(file.fname_);
         LinkedListKvs cache_kvs;
-        BlockStorageKvs<GenericBlockBuffer> block_storage_kvs(block_storage, cache_kvs);
-        tester.Write(block_storage_kvs);
+        AppendOnlyCharStorageOverBlockStorage<GenericBlockBuffer> char_storage(block_storage);
+        CharStorageKvs char_storage_kvs(char_storage, cache_kvs);
+        tester.Write(char_storage_kvs);
     }
     {
         FileBlockStorage block_storage(file.fname_);
         LinkedListKvs cache_kvs;
-        BlockStorageKvs<GenericBlockBuffer> block_storage_kvs(block_storage, cache_kvs);
-        tester.Read(block_storage_kvs);
+        AppendOnlyCharStorageOverBlockStorage<GenericBlockBuffer> char_storage(block_storage);
+        CharStorageKvs char_storage_kvs(char_storage, cache_kvs);
+        tester.Read(char_storage_kvs);
     }
 }
 
@@ -104,24 +109,26 @@ static inline void store_many_kvpairs()
     {
         FileBlockStorage block_storage(file.fname_);
         LinkedListKvs cache_kvs;
-        BlockStorageKvs<GenericBlockBuffer> block_storage_kvs(block_storage, cache_kvs);
+        AppendOnlyCharStorageOverBlockStorage<GenericBlockBuffer> char_storage(block_storage);
+        CharStorageKvs char_storage_kvs(char_storage, cache_kvs);
         for (int i = 0; i < 3500; i++)
         {
             char key[20];
             snprintf(key, sizeof(key), "%016d", i);
-            assert(block_storage_kvs.Put(WriteOptions(), ConstSlice(key, strlen(key)), CreateSliceFromChar('a', 500)).IsOk());
+            assert(char_storage_kvs.Put(WriteOptions(), ConstSlice(key, strlen(key)), CreateSliceFromChar('a', 500)).IsOk());
         }
     }
     {
         FileBlockStorage block_storage(file.fname_);
         LinkedListKvs cache_kvs;
-        BlockStorageKvs<GenericBlockBuffer> block_storage_kvs(block_storage, cache_kvs);
+        AppendOnlyCharStorageOverBlockStorage<GenericBlockBuffer> char_storage(block_storage);
+        CharStorageKvs char_storage_kvs(char_storage, cache_kvs);
         for (int i = 0; i < 3500; i++)
         {
             char key[20];
             snprintf(key, sizeof(key), "%016d", i);
             SliceContainer container;
-            assert(block_storage_kvs.Get(ReadOptions(), ConstSlice(key, strlen(key)), container).IsOk());
+            assert(char_storage_kvs.Get(ReadOptions(), ConstSlice(key, strlen(key)), container).IsOk());
         }
     }
 }
