@@ -1,6 +1,6 @@
 #pragma once
 #include "block_storage_interface.h"
-#include "utils/ve_rtc.h"
+#include "utils/rtc.h"
 #include <assert.h>
 #include <unvme.h>
 #include <unvme_nvme.h>
@@ -46,10 +46,10 @@ namespace HayaguiKvs
         }
         int Apoll(unvme_iod_t iod)
         {
-            uint64_t endtime = VeRtcTaker::get() + 1000L * 1000 * 1000;
+            uint64_t endtime = RtcTaker::get() + 1000L * 1000 * 1000;
             while (true)
             {
-                if (VeRtcTaker::get() > endtime)
+                if (RtcTaker::get() > endtime)
                 {
                     return -1;
                 }

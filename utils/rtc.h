@@ -2,16 +2,17 @@
 #include <stdint.h>
 #include <stdio.h>
 
-class VeRtcTaker
+class RtcTaker
 {
 public:
-    VeRtcTaker() : x_(get())
+    RtcTaker() : x_(get())
     {
     }
     void PrintMeasuredTime()
     {
         Print(get() - x_);
     }
+#ifdef __ve__
     static inline uint64_t get()
     {
         uint64_t ret;
@@ -26,14 +27,26 @@ public:
         // the "800" is due to the base frequency of Tsubasa
         return ((uint64_t)1000 * ret) / 800;
     }
+#else
 
+    static inline uint64_t get()
+    {
+        uint32_t aux;
+        uint64_t rax, rdx;
+        asm volatile("rdtscp\n"
+                     : "=a"(rax), "=d"(rdx), "=c"(aux)
+                     :
+                     :);
+        return ((rdx << 32) + rax) * 10 / 26;
+    }
+
+#endif
 protected:
     virtual void Print(uint64_t time) = 0;
 
 private:
     const uint64_t x_;
 };
-
 
 class TimeTaker
 {
@@ -47,7 +60,7 @@ public:
     }
 
 private:
-    class TimeTakerInternal final : public VeRtcTaker
+    class TimeTakerInternal final : public RtcTaker
     {
     public:
         TimeTakerInternal(const char *const string) : string_(string)

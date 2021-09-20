@@ -2,7 +2,7 @@
 #include "./test.h"
 #include "./kvs_misc.h"
 #include "misc.h"
-#include "utils/ve_rtc.h"
+#include "utils/rtc.h"
 #include <assert.h>
 #include <utility>
 
@@ -100,7 +100,7 @@ private:
         }
 
     private:
-        class TimeTakerInternal final : public VeRtcTaker
+        class TimeTakerInternal final : public RtcTaker
         {
         public:
             TimeTakerInternal(const char *const string) : string_(string)

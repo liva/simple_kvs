@@ -2,7 +2,7 @@
 #include "kvs_interface.h"
 #include "utils/allocator.h"
 #include "utils/rnd.h"
-#include "utils/ve_rtc.h"
+#include "utils/rtc.h"
 #include <new>
 #include <assert.h>
 
@@ -12,7 +12,7 @@ namespace HayaguiKvs
     class SkipListKvs final : public Kvs
     {
     public:
-        SkipListKvs() : rnd_(VeRtcTaker::get())
+        SkipListKvs() : rnd_(RtcTaker::get())
         {
         }
         virtual ~SkipListKvs() override
