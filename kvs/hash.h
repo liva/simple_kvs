@@ -5,13 +5,13 @@ namespace HayaguiKvs
 {
     struct HashCalculatorInterface
     {
-        virtual const int CalcHash(const int bucket_size, const ConstSlice &key) = 0;
+        virtual const int CalcHash(const int bucket_size, const ValidSlice &key) = 0;
     };
 
     class SimpleHashCalculator final : public HashCalculatorInterface
     {
     public:
-        virtual const int CalcHash(const int bucket_size, const ConstSlice &key) override
+        virtual const int CalcHash(const int bucket_size, const ValidSlice &key) override
         {
             int cnt = 0;
             for (int i = 0; i < key.GetLen(); i++)
@@ -48,17 +48,17 @@ namespace HayaguiKvs
         }
         HashKvs(const HashKvs &obj) = delete;
         HashKvs &operator=(const HashKvs &obj) = delete;
-        virtual Status Get(ReadOptions options, const ConstSlice &key, SliceContainer &container) override
+        virtual Status Get(ReadOptions options, const ValidSlice &key, SliceContainer &container) override
         {
             const int index = hash_calcurator_.CalcHash(bucket_size_, key);
             return buckets_[index]->Get(options, key, container);
         }
-        virtual Status Put(WriteOptions options, const ConstSlice &key, const ConstSlice &value) override
+        virtual Status Put(WriteOptions options, const ValidSlice &key, const ValidSlice &value) override
         {
             const int index = hash_calcurator_.CalcHash(bucket_size_, key);
             return buckets_[index]->Put(options, key, value);
         }
-        virtual Status Delete(WriteOptions options, const ConstSlice &key) override
+        virtual Status Delete(WriteOptions options, const ValidSlice &key) override
         {
             const int index = hash_calcurator_.CalcHash(bucket_size_, key);
             return buckets_[index]->Delete(options, key);
@@ -84,13 +84,13 @@ namespace HayaguiKvs
             }
             return Optional<KvsEntryIterator>::CreateValidObj(GetIterator(key_container.CreateConstSlice()));
         }
-        virtual KvsEntryIterator GetIterator(const ConstSlice &key) override
+        virtual KvsEntryIterator GetIterator(const ValidSlice &key) override
         {
             GenericKvsEntryIteratorBase *base = MemAllocator::alloc<GenericKvsEntryIteratorBase>();
             new (base) GenericKvsEntryIteratorBase(*this, key);
             return KvsEntryIterator(base);
         }
-        virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) override
+        virtual Status FindNextKey(const ValidSlice &key, SliceContainer &container) override
         {
             LowerSliceContainer key_container;
             for (int i = 0; i < bucket_size_; i++)

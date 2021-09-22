@@ -5,6 +5,7 @@
 #include "utils/rtc.h"
 #include <new>
 #include <assert.h>
+#include "utils/debug.h"
 
 namespace HayaguiKvs
 {
@@ -20,15 +21,15 @@ namespace HayaguiKvs
         }
         SkipListKvs(const SkipListKvs &obj) = delete;
         SkipListKvs &operator=(const SkipListKvs &obj) = delete;
-        virtual Status Get(ReadOptions options, const ConstSlice &key, SliceContainer &container) override
+        virtual Status Get(ReadOptions options, const ValidSlice &key, SliceContainer &container) override
         {
             return first_element_.GetValueRecursivelyFromNext(key, container);
         }
-        virtual Status Put(WriteOptions options, const ConstSlice &key, const ConstSlice &value) override
+        virtual Status Put(WriteOptions options, const ValidSlice &key, const ValidSlice &value) override
         {
             return first_element_.PutValueRecursivelyFromNext(key, value);
         }
-        virtual Status Delete(WriteOptions options, const ConstSlice &key) override
+        virtual Status Delete(WriteOptions options, const ValidSlice &key) override
         {
             return first_element_.DeleteValueRecursivelyFromNext(key);
         }
@@ -42,13 +43,13 @@ namespace HayaguiKvs
             }
             return Optional<KvsEntryIterator>::CreateValidObj(GetIterator(key_container.CreateConstSlice()));
         }
-        virtual KvsEntryIterator GetIterator(const ConstSlice &key) override
+        virtual KvsEntryIterator GetIterator(const ValidSlice &key) override
         {
             GenericKvsEntryIteratorBase *base = MemAllocator::alloc<GenericKvsEntryIteratorBase>();
             new (base) GenericKvsEntryIteratorBase(*this, key);
             return KvsEntryIterator(base);
         }
-        virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) override
+        virtual Status FindNextKey(const ValidSlice &key, SliceContainer &container) override
         {
             return first_element_.FindSubsequentKeyRecursivelyFromNext(key, container);
         }
@@ -58,8 +59,8 @@ namespace HayaguiKvs
         {
         public:
             Element() = delete;
-            Element(const ConstSlice &key, const ConstSlice &value)
-                : key_(key), value_(DuplicateSlice(value))
+            Element(const ValidSlice &key, const ValidSlice &value)
+                : key_(ConstSlice::CreateFromValidSlice(key)), value_(DuplicateSlice(value))
             {
                 InitNextsWithNull();
             }
@@ -72,19 +73,7 @@ namespace HayaguiKvs
                     assert(next_[i] == nullptr);
                 }
             }
-            bool isKeyEqual(const ConstSlice &key) const
-            {
-                CmpResult result;
-                cmpKey(key, result);
-                return result.IsEqual();
-            }
-            bool isKeyGreater(const ConstSlice &key) const
-            {
-                CmpResult result;
-                cmpKey(key, result);
-                return result.IsGreater();
-            }
-            void cmpKey(const ConstSlice &key, CmpResult &result) const
+            void cmpKey(const ValidSlice &key, CmpResult &result) const
             {
                 Status s = key_.Cmp(key, result);
                 assert(s.IsOk());
@@ -101,7 +90,7 @@ namespace HayaguiKvs
             {
                 return next_[level];
             }
-            void ReplaceValueWith(const ConstSlice &new_value)
+            void ReplaceValueWith(const ValidSlice &new_value)
             {
                 ReleaseValue();
                 value_ = DuplicateSlice(new_value);
@@ -128,10 +117,10 @@ namespace HayaguiKvs
                     next_[i] = nullptr;
                 }
             }
-            ConstSlice *DuplicateSlice(const ConstSlice &slice)
+            ConstSlice *DuplicateSlice(const ValidSlice &slice)
             {
                 ConstSlice *allocated_slice_ = MemAllocator::alloc<ConstSlice>();
-                new (allocated_slice_) ConstSlice(slice);
+                new (allocated_slice_) ConstSlice(ConstSlice::CreateFromValidSlice(slice));
                 return allocated_slice_;
             }
             void ReleaseValue()
@@ -159,25 +148,25 @@ namespace HayaguiKvs
             {
                 return ele_ != nullptr;
             }
-            Status GetValueRecursivelyFromNext(const ConstSlice &key, SliceContainer &container)
+            Status GetValueRecursivelyFromNext(const ValidSlice &key, SliceContainer &container)
             {
                 GetProcessor processor(key, container);
                 Element *prev[kHeight];
                 return Walk(prev, processor);
             }
-            Status PutValueRecursivelyFromNext(const ConstSlice &key, const ConstSlice &value)
+            Status PutValueRecursivelyFromNext(const ValidSlice &key, const ValidSlice &value)
             {
                 PutProcessor processor(key, value, rnd_);
                 Element *prev[kHeight];
                 return Walk(prev, processor);
             }
-            Status DeleteValueRecursivelyFromNext(const ConstSlice &key)
+            Status DeleteValueRecursivelyFromNext(const ValidSlice &key)
             {
                 DeleteProcessor processor(key);
                 Element *prev[kHeight];
                 return Walk(prev, processor);
             }
-            Status FindSubsequentKeyRecursivelyFromNext(const ConstSlice &key, SliceContainer &container)
+            Status FindSubsequentKeyRecursivelyFromNext(const ValidSlice &key, SliceContainer &container)
             {
                 FindNextKeyProcessor processor(key, container, rnd_);
                 Element *prev[kHeight];
@@ -205,7 +194,7 @@ namespace HayaguiKvs
         private:
             struct ProcessorInterface
             {
-                virtual const ConstSlice &GetKey() = 0;
+                virtual const ValidSlice &GetKey() = 0;
                 virtual Status ProcessTheCaseOfNoMoreEntries(Element *prev[kHeight]) = 0;
                 virtual Status ProcessTheCaseOfNextEqualsToTheKey(Container &prev) = 0;
                 virtual Status ProcessTheCaseOfNextGreaterThanTheKey(Element *prev[kHeight]) = 0;
@@ -214,11 +203,11 @@ namespace HayaguiKvs
             {
             public:
                 DeleteProcessor() = delete;
-                DeleteProcessor(const ConstSlice &key)
+                DeleteProcessor(const ValidSlice &key)
                     : key_(key)
                 {
                 }
-                virtual const ConstSlice &GetKey() override
+                virtual const ValidSlice &GetKey() override
                 {
                     return key_;
                 }
@@ -242,17 +231,17 @@ namespace HayaguiKvs
                 }
 
             private:
-                const ConstSlice &key_;
+                const ValidSlice &key_;
             };
             class PutProcessor : public ProcessorInterface
             {
             public:
                 PutProcessor() = delete;
-                PutProcessor(const ConstSlice &key, const ConstSlice &value, Random &rnd)
+                PutProcessor(const ValidSlice &key, const ValidSlice &value, Random &rnd)
                     : key_(key), value_(value), rnd_(rnd)
                 {
                 }
-                virtual const ConstSlice &GetKey() override
+                virtual const ValidSlice &GetKey() override
                 {
                     return key_;
                 }
@@ -274,19 +263,19 @@ namespace HayaguiKvs
                 }
 
             private:
-                const ConstSlice &key_;
-                const ConstSlice &value_;
+                const ValidSlice &key_;
+                const ValidSlice &value_;
                 Random &rnd_;
             };
             class GetProcessor : public ProcessorInterface
             {
             public:
                 GetProcessor() = delete;
-                GetProcessor(const ConstSlice &key, SliceContainer &container)
+                GetProcessor(const ValidSlice &key, SliceContainer &container)
                     : key_(key), container_(container)
                 {
                 }
-                virtual const ConstSlice &GetKey() override
+                virtual const ValidSlice &GetKey() override
                 {
                     return key_;
                 }
@@ -310,18 +299,18 @@ namespace HayaguiKvs
                 }
 
             private:
-                const ConstSlice &key_;
+                const ValidSlice &key_;
                 SliceContainer &container_;
             };
             class FindNextKeyProcessor : public ProcessorInterface
             {
             public:
                 FindNextKeyProcessor() = delete;
-                FindNextKeyProcessor(const ConstSlice &key, SliceContainer &container, Random &rnd)
+                FindNextKeyProcessor(const ValidSlice &key, SliceContainer &container, Random &rnd)
                     : key_(key), container_(container), rnd_(rnd)
                 {
                 }
-                virtual const ConstSlice &GetKey() override
+                virtual const ValidSlice &GetKey() override
                 {
                     return key_;
                 }
@@ -356,7 +345,7 @@ namespace HayaguiKvs
                     }
                     return next.GetKey(container_);
                 }
-                const ConstSlice &key_;
+                const ValidSlice &key_;
                 SliceContainer &container_;
                 Random &rnd_;
             };
@@ -373,11 +362,13 @@ namespace HayaguiKvs
                     Container container_at_the_lower_level(ele_, focused_level_ - 1, rnd_);
                     return container_at_the_lower_level.Walk(prev, processor);
                 }
-                if (next.ele_->isKeyEqual(processor.GetKey()))
+                CmpResult result;
+                next.ele_->cmpKey(processor.GetKey(), result);
+                if (result.IsEqual())
                 {
                     return processor.ProcessTheCaseOfNextEqualsToTheKey(*this);
                 }
-                if (next.ele_->isKeyGreater(processor.GetKey()))
+                if (result.IsGreater())
                 {
                     prev[focused_level_] = ele_;
                     if (focused_level_ == 0)
@@ -389,7 +380,7 @@ namespace HayaguiKvs
                 }
                 return next.Walk(prev, processor);
             }
-            static Element *CreateElement(const ConstSlice &key, const ConstSlice &value)
+            static Element *CreateElement(const ValidSlice &key, const ValidSlice &value)
             {
                 Element *ele = MemAllocator::alloc<Element>();
                 new (ele) Element(key, value);
@@ -403,7 +394,7 @@ namespace HayaguiKvs
             {
                 return RandomHeight(kHeight, rnd);
             }
-            static void InsertNext(Element *prev[kHeight], const ConstSlice &key, const ConstSlice &value, Random &rnd)
+            static void InsertNext(Element *prev[kHeight], const ValidSlice &key, const ValidSlice &value, Random &rnd)
             {
                 const int ele_height = CalcurateElementHeightForNewElement(rnd);
                 Element *new_ele = CreateElement(key, value);

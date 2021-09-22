@@ -16,15 +16,15 @@ namespace HayaguiKvs
         }
         LinkedListKvs(const LinkedListKvs &obj) = delete;
         LinkedListKvs &operator=(const LinkedListKvs &obj) = delete;
-        virtual Status Get(ReadOptions options, const ConstSlice &key, SliceContainer &container) override
+        virtual Status Get(ReadOptions options, const ValidSlice &key, SliceContainer &container) override
         {
             return first_element_.GetValueRecursivelyFromNext(key, container);
         }
-        virtual Status Put(WriteOptions options, const ConstSlice &key, const ConstSlice &value) override
+        virtual Status Put(WriteOptions options, const ValidSlice &key, const ValidSlice &value) override
         {
             return first_element_.PutValueRecursivelyFromNext(key, value);
         }
-        virtual Status Delete(WriteOptions options, const ConstSlice &key) override
+        virtual Status Delete(WriteOptions options, const ValidSlice &key) override
         {
             return first_element_.DeleteValueRecursivelyFromNext(key);
         }
@@ -38,13 +38,13 @@ namespace HayaguiKvs
             }
             return Optional<KvsEntryIterator>::CreateValidObj(GetIterator(key_container.CreateConstSlice()));
         }
-        virtual KvsEntryIterator GetIterator(const ConstSlice &key) override
+        virtual KvsEntryIterator GetIterator(const ValidSlice &key) override
         {
             GenericKvsEntryIteratorBase *base = MemAllocator::alloc<GenericKvsEntryIteratorBase>();
             new (base) GenericKvsEntryIteratorBase(*this, key);
             return KvsEntryIterator(base);
         }
-        virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) override
+        virtual Status FindNextKey(const ValidSlice &key, SliceContainer &container) override
         {
             return first_element_.FindSubsequentKeyRecursivelyFromNext(key, container);
         }
@@ -54,27 +54,28 @@ namespace HayaguiKvs
         {
         public:
             Element() = delete;
-            Element(const ConstSlice &key, const ConstSlice &value)
-                : key_(key), value_(value)
+            Element(const ValidSlice &key, const ValidSlice &value)
+                : key_(ConstSlice::CreateFromValidSlice(key)),
+                  value_(ConstSlice::CreateFromValidSlice(value))
             {
             }
             ~Element()
             {
                 assert(next_ == nullptr); // to ensure the linked element is referred by others
             }
-            bool isKeyEqual(const ConstSlice &key) const
+            bool isKeyEqual(const ValidSlice &key) const
             {
                 CmpResult result;
                 cmpKey(key, result);
                 return result.IsEqual();
             }
-            bool isKeyGreater(const ConstSlice &key) const
+            bool isKeyGreater(const ValidSlice &key) const
             {
                 CmpResult result;
                 cmpKey(key, result);
                 return result.IsGreater();
             }
-            void cmpKey(const ConstSlice &key, CmpResult &result) const
+            void cmpKey(const ValidSlice &key, CmpResult &result) const
             {
                 Status s = key_.Cmp(key, result);
                 assert(s.IsOk());
@@ -124,22 +125,22 @@ namespace HayaguiKvs
             {
                 return Container(ele_->GetNext());
             }
-            Status GetValueRecursivelyFromNext(const ConstSlice &key, SliceContainer &container)
+            Status GetValueRecursivelyFromNext(const ValidSlice &key, SliceContainer &container)
             {
                 GetProcessor processor(key, container);
                 return Walk(processor);
             }
-            Status PutValueRecursivelyFromNext(const ConstSlice &key, const ConstSlice &value)
+            Status PutValueRecursivelyFromNext(const ValidSlice &key, const ValidSlice &value)
             {
                 PutProcessor processor(key, value);
                 return Walk(processor);
             }
-            Status DeleteValueRecursivelyFromNext(const ConstSlice &key)
+            Status DeleteValueRecursivelyFromNext(const ValidSlice &key)
             {
                 DeleteProcessor processor(key);
                 return Walk(processor);
             }
-            Status FindSubsequentKeyRecursivelyFromNext(const ConstSlice &key, SliceContainer &container)
+            Status FindSubsequentKeyRecursivelyFromNext(const ValidSlice &key, SliceContainer &container)
             {
                 FindNextKeyProcessor processor(key, container);
                 return Walk(processor);
@@ -162,7 +163,7 @@ namespace HayaguiKvs
         private:
             struct ProcessorInterface
             {
-                virtual const ConstSlice &GetKey() = 0;
+                virtual const ValidSlice &GetKey() = 0;
                 virtual Status ProcessTheCaseOfNoMoreEntries(Container &prev) = 0;
                 virtual Status ProcessTheCaseOfNextEqualsToTheKey(Container &prev) = 0;
                 virtual Status ProcessTheCaseOfNextGreaterThanTheKey(Container &prev) = 0;
@@ -171,11 +172,11 @@ namespace HayaguiKvs
             {
             public:
                 DeleteProcessor() = delete;
-                DeleteProcessor(const ConstSlice &key)
+                DeleteProcessor(const ValidSlice &key)
                     : key_(key)
                 {
                 }
-                virtual const ConstSlice &GetKey() override
+                virtual const ValidSlice &GetKey() override
                 {
                     return key_;
                 }
@@ -192,18 +193,19 @@ namespace HayaguiKvs
                 {
                     return Status::CreateErrorStatus();
                 }
+
             private:
-                const ConstSlice &key_;
+                const ValidSlice &key_;
             };
             class PutProcessor : public ProcessorInterface
             {
             public:
                 PutProcessor() = delete;
-                PutProcessor(const ConstSlice &key, const ConstSlice &value)
+                PutProcessor(const ValidSlice &key, const ValidSlice &value)
                     : key_(key), value_(value)
                 {
                 }
-                virtual const ConstSlice &GetKey() override
+                virtual const ValidSlice &GetKey() override
                 {
                     return key_;
                 }
@@ -223,19 +225,20 @@ namespace HayaguiKvs
                     prev.InsertNext(key_, value_);
                     return Status::CreateOkStatus();
                 }
+
             private:
-                const ConstSlice &key_;
-                const ConstSlice &value_;
+                const ValidSlice &key_;
+                const ValidSlice &value_;
             };
             class GetProcessor : public ProcessorInterface
             {
             public:
                 GetProcessor() = delete;
-                GetProcessor(const ConstSlice &key, SliceContainer &container)
+                GetProcessor(const ValidSlice &key, SliceContainer &container)
                     : key_(key), container_(container)
                 {
                 }
-                virtual const ConstSlice &GetKey() override
+                virtual const ValidSlice &GetKey() override
                 {
                     return key_;
                 }
@@ -252,19 +255,20 @@ namespace HayaguiKvs
                 {
                     return Status::CreateErrorStatus();
                 }
+
             private:
-                const ConstSlice &key_;
+                const ValidSlice &key_;
                 SliceContainer &container_;
             };
             class FindNextKeyProcessor : public ProcessorInterface
             {
             public:
                 FindNextKeyProcessor() = delete;
-                FindNextKeyProcessor(const ConstSlice &key, SliceContainer &container)
+                FindNextKeyProcessor(const ValidSlice &key, SliceContainer &container)
                     : key_(key), container_(container)
                 {
                 }
-                virtual const ConstSlice &GetKey() override
+                virtual const ValidSlice &GetKey() override
                 {
                     return key_;
                 }
@@ -280,8 +284,9 @@ namespace HayaguiKvs
                 {
                     return prev.GetNext().GetKey(container_);
                 }
+
             private:
-                const ConstSlice &key_;
+                const ValidSlice &key_;
                 SliceContainer &container_;
             };
             Status Walk(ProcessorInterface &processor)
@@ -308,13 +313,13 @@ namespace HayaguiKvs
                 ele_->RetrieveNextFrom(next.ele_);
                 DeleteElement(next.ele_);
             }
-            void InsertNext(const ConstSlice &key, const ConstSlice &value)
+            void InsertNext(const ValidSlice &key, const ValidSlice &value)
             {
                 Element *new_ele = CreateElement(key, value);
                 new_ele->RetrieveNextFrom(ele_);
                 ele_->SetNext(new_ele);
             }
-            static Element *CreateElement(const ConstSlice &key, const ConstSlice &value)
+            static Element *CreateElement(const ValidSlice &key, const ValidSlice &value)
             {
                 Element *ele = MemAllocator::alloc<Element>();
                 new (ele) Element(key, value);

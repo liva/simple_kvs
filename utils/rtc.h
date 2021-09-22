@@ -33,10 +33,14 @@ public:
     {
         uint32_t aux;
         uint64_t rax, rdx;
+        asm volatile("" ::
+                         : "memory");
         asm volatile("rdtscp\n"
                      : "=a"(rax), "=d"(rdx), "=c"(aux)
                      :
                      :);
+        asm volatile("" ::
+                         : "memory");
         return ((rdx << 32) + rax) * 10 / 26;
     }
 

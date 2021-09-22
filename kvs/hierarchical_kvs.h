@@ -25,11 +25,11 @@ namespace HayaguiKvs
         virtual ~HierarchicalKvs() override
         {
         }
-        virtual Status Get(ReadOptions options, const ConstSlice &key, SliceContainer &container) override
+        virtual Status Get(ReadOptions options, const ValidSlice &key, SliceContainer &container) override
         {
             return base_kvs_.Get(options, key, container);
         }
-        virtual Status Put(WriteOptions options, const ConstSlice &key, const ConstSlice &value) override
+        virtual Status Put(WriteOptions options, const ValidSlice &key, const ValidSlice &value) override
         {
             if (underlying_kvs_.Put(options, key, value).IsError())
             {
@@ -37,7 +37,7 @@ namespace HayaguiKvs
             }
             return base_kvs_.Put(options, key, value);
         }
-        virtual Status Delete(WriteOptions options, const ConstSlice &key) override
+        virtual Status Delete(WriteOptions options, const ValidSlice &key) override
         {
             if (underlying_kvs_.Delete(options, key).IsError())
             {
@@ -56,13 +56,13 @@ namespace HayaguiKvs
             assert(s1.IsOk());
             return Optional<KvsEntryIterator>::CreateValidObj(GetIterator(key_container.CreateConstSlice()));
         }
-        virtual KvsEntryIterator GetIterator(const ConstSlice &key) override
+        virtual KvsEntryIterator GetIterator(const ValidSlice &key) override
         {
             GenericKvsEntryIteratorBase *base = MemAllocator::alloc<GenericKvsEntryIteratorBase>();
             new (base) GenericKvsEntryIteratorBase(*this, key);
             return KvsEntryIterator(base);
         }
-        virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) override {
+        virtual Status FindNextKey(const ValidSlice &key, SliceContainer &container) override {
             return base_kvs_.FindNextKey(key, container);
         }
 

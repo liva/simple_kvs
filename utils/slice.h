@@ -167,7 +167,7 @@ namespace HayaguiKvs
         virtual int GetLen() const = 0;
 
     protected:
-        friend class ConstSlice;
+        friend class BufferPtrSlice;
         friend class ShrinkedSlice;
         virtual Status CopyToBufferWithRegion(char *buf, const size_t offset, const size_t len) const override final
         {
@@ -189,12 +189,12 @@ namespace HayaguiKvs
     };
     inline ValidSlice::~ValidSlice() {}
 
-    class ConstSlice;
+    //class ConstSlice;
 
     class ShrinkedSlice : public ValidSlice
     {
     public:
-        ShrinkedSlice(const ConstSlice &slice, const size_t offset, const size_t len)
+        /*ShrinkedSlice(const ConstSlice &slice, const size_t offset, const size_t len)
             : underlying_slice_((const ValidSlice &)slice),
               offset_(offset),
               len_(len)
@@ -207,7 +207,7 @@ namespace HayaguiKvs
               len_(len)
         {
             assert(offset + len <= underlying_slice_.GetLen());
-        }
+        }*/
         ShrinkedSlice(const ValidSlice &slice, const size_t offset, const size_t len)
             : underlying_slice_(slice),
               offset_(offset),
@@ -248,76 +248,26 @@ namespace HayaguiKvs
         const size_t offset_;
         const size_t len_;
     };
-
-    class ConstSlice : public ValidSlice
+    class BufferPtrSlice : public ValidSlice
     {
     public:
-        ConstSlice() = delete;
-        ConstSlice(const ConstSlice &slice) : buf_(DuplicateBuffer(slice)), len_(slice.GetLen())
+        BufferPtrSlice() = delete;
+        BufferPtrSlice(const char *const buf, const int len) : buf_(buf), len_(len)
         {
         }
-        ConstSlice(const ShrinkedSlice &slice) : buf_(DuplicateBuffer(slice)), len_(slice.GetLen())
-        {
-        }
-        ConstSlice(const ValidSlice &slice) : buf_(DuplicateBuffer(slice)), len_(slice.GetLen())
-        {
-        }
-        ConstSlice(const char *const buf, const int len) : buf_(DuplicateBuffer(buf, len)), len_(len)
-        {
-        }
-        static ConstSlice CreateConstSliceFromSlices(const ValidSlice **slices, const int cnt)
-        {
-            int len = 0;
-            for (int i = 0; i < cnt; i++)
-            {
-                len += slices[i]->GetLen();
-            }
-            char *const buf = (char *)MemAllocator::alloc(len);
-
-            int offset = 0;
-            for (int i = 0; i < cnt; i++)
-            {
-                if (slices[i]->CopyToBuffer(buf + offset).IsError())
-                {
-                    abort();
-                }
-                offset += slices[i]->GetLen();
-            }
-
-            PreAllocatedBuffer pre_allocated_buffer = {buf, len};
-            return ConstSlice(pre_allocated_buffer);
-        }
-        ConstSlice(ConstSlice &&obj) : buf_(obj.buf_), len_(obj.len_)
+        BufferPtrSlice(BufferPtrSlice &&obj) : buf_(obj.buf_), len_(obj.len_)
         {
             obj.buf_ = nullptr;
             obj.len_ = 0;
         }
-        virtual ~ConstSlice()
+        virtual ~BufferPtrSlice()
         {
-            if (buf_ != nullptr)
-            {
-                MemAllocator::free(const_cast<char *>(buf_));
-            }
         }
-        virtual void PrintWithRegion(const Region region) const override final
+        virtual void PrintWithRegion(const Region region) const override
         {
-            printf("CS<");
-            for (int i = region.offset_; i < region.len_; i++)
-            {
-                char c = buf_[i];
-                if (32 <= c && c <= 126)
-                {
-                    printf("%c", c);
-                }
-                else
-                {
-                    printf("[%02X]", c);
-                }
-            }
-            printf(">(len: %zu)", region.len_);
-            fflush(stdout);
+            PrintWithRegionSub("BPS", region);
         }
-        virtual int GetLen() const override
+        virtual int GetLen() const override final
         {
             return len_;
         }
@@ -356,9 +306,83 @@ namespace HayaguiKvs
             }
             return Status::CreateOkStatus();
         }
+
+    protected:
         virtual const char *const GetRawPtr() const override final
         {
             return buf_;
+        }
+        void PrintWithRegionSub(const char *const signature, const Region region) const
+        {
+            printf("%s<", signature);
+            for (int i = region.offset_; i < region.len_; i++)
+            {
+                char c = buf_[i];
+                if (32 <= c && c <= 126)
+                {
+                    printf("%c", c);
+                }
+                else
+                {
+                    printf("[%02X]", c);
+                }
+            }
+            printf(">(len: %zu)", region.len_);
+            fflush(stdout);
+        }
+        const char *buf_;
+        int len_;
+    };
+
+    class ConstSlice : public BufferPtrSlice
+    {
+    public:
+        ConstSlice() = delete;
+        ConstSlice(const ConstSlice &slice) : BufferPtrSlice(DuplicateBuffer(slice), slice.GetLen())
+        {
+        }
+        ConstSlice(const char *const buf, const int len) : BufferPtrSlice(DuplicateBuffer(buf, len), len)
+        {
+        }
+        static ConstSlice CreateFromValidSlice(const ValidSlice &slice)
+        {
+            return ConstSlice(slice);
+        }
+        static ConstSlice CreateConstSliceFromSlices(const ValidSlice **slices, const int cnt)
+        {
+            int len = 0;
+            for (int i = 0; i < cnt; i++)
+            {
+                len += slices[i]->GetLen();
+            }
+            char *const buf = (char *)MemAllocator::alloc(len);
+
+            int offset = 0;
+            for (int i = 0; i < cnt; i++)
+            {
+                if (slices[i]->CopyToBuffer(buf + offset).IsError())
+                {
+                    abort();
+                }
+                offset += slices[i]->GetLen();
+            }
+
+            PreAllocatedBuffer pre_allocated_buffer = {buf, len};
+            return ConstSlice(pre_allocated_buffer);
+        }
+        ConstSlice(ConstSlice &&obj) : BufferPtrSlice(std::move(obj))
+        {
+        }
+        virtual ~ConstSlice()
+        {
+            if (buf_ != nullptr)
+            {
+                MemAllocator::free(const_cast<char *>(buf_));
+            }
+        }
+        virtual void PrintWithRegion(const Region region) const override final
+        {
+            PrintWithRegionSub("CS", region);
         }
 
     private:
@@ -367,7 +391,10 @@ namespace HayaguiKvs
             char *const buf;
             int len;
         };
-        ConstSlice(PreAllocatedBuffer pre_allocated_buffer) : buf_(pre_allocated_buffer.buf), len_(pre_allocated_buffer.len)
+        ConstSlice(const ValidSlice &slice) : BufferPtrSlice(DuplicateBuffer(slice), slice.GetLen())
+        {
+        }
+        ConstSlice(PreAllocatedBuffer pre_allocated_buffer) : BufferPtrSlice(pre_allocated_buffer.buf, pre_allocated_buffer.len)
         {
         }
         static const char *const DuplicateBuffer(const ValidSlice &slice)
@@ -385,9 +412,6 @@ namespace HayaguiKvs
             memcpy(new_buf, buf, len);
             return new_buf;
         }
-
-        const char *buf_;
-        int len_;
     };
 
     class SliceContainer
@@ -416,19 +440,18 @@ namespace HayaguiKvs
         void Set(const ValidSlice &slice)
         {
             Release();
-            slice_ = new (MemAllocator::alloc<ConstSlice>()) ConstSlice(slice);
+            slice_ = new (buf_) ConstSlice(ConstSlice::CreateFromValidSlice(slice));
         }
         void Set(const char *const buf, const int len)
         {
             Release();
-            slice_ = new (MemAllocator::alloc<ConstSlice>()) ConstSlice(buf, len);
+            slice_ = new (buf_) ConstSlice(buf, len);
         }
         void Release()
         {
             if (slice_)
             {
                 slice_->~ConstSlice();
-                MemAllocator::free(slice_);
                 slice_ = nullptr;
             }
         }
@@ -505,6 +528,7 @@ namespace HayaguiKvs
             obj.slice_ = nullptr;
         }
         ConstSlice *slice_;
+        char buf_[sizeof(ConstSlice)] __attribute__ ((aligned (8)));
     };
 
     inline Status ValidSlice::SetToContainer(SliceContainer &container) const

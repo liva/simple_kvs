@@ -20,7 +20,7 @@ namespace HayaguiKvs
         virtual bool hasNext() = 0;
         virtual KvsEntryIteratorBaseInterface *GetNext() = 0;
         virtual Status Get(ReadOptions options, SliceContainer &container) = 0;
-        virtual Status Put(WriteOptions options, ConstSlice &value) = 0;
+        virtual Status Put(WriteOptions options, ValidSlice &value) = 0;
         virtual Status Delete(WriteOptions options) = 0;
         virtual Status GetKey(SliceContainer &container) = 0;
     };
@@ -69,7 +69,7 @@ namespace HayaguiKvs
         {
             return base_->Get(options, container);
         }
-        Status Put(WriteOptions options, ConstSlice &value)
+        Status Put(WriteOptions options, ValidSlice &value)
         {
             return base_->Put(options, value);
         }
@@ -105,12 +105,12 @@ namespace HayaguiKvs
     {
     public:
         virtual ~Kvs() = 0;
-        virtual Status Get(ReadOptions options, const ConstSlice &key, SliceContainer &container) = 0;
-        virtual Status Put(WriteOptions options, const ConstSlice &key, const ConstSlice &value) = 0;
-        virtual Status Delete(WriteOptions options, const ConstSlice &key) = 0;
+        virtual Status Get(ReadOptions options, const ValidSlice &key, SliceContainer &container) = 0;
+        virtual Status Put(WriteOptions options, const ValidSlice &key, const ValidSlice &value) = 0;
+        virtual Status Delete(WriteOptions options, const ValidSlice &key) = 0;
         virtual Optional<KvsEntryIterator> GetFirstIterator() = 0;
-        virtual KvsEntryIterator GetIterator(const ConstSlice &key) = 0; // warning: retured iterator does not promise the existence of the key.
-        virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) = 0;
+        virtual KvsEntryIterator GetIterator(const ValidSlice &key) = 0; // warning: retured iterator does not promise the existence of the key.
+        virtual Status FindNextKey(const ValidSlice &key, SliceContainer &container) = 0;
         Status DeleteAll(WriteOptions options)
         {
             return DeleteIterRecursive(GetFirstIterator(), options);
@@ -153,7 +153,7 @@ namespace HayaguiKvs
     {
     public:
         GenericKvsEntryIteratorBase() = delete;
-        GenericKvsEntryIteratorBase(Kvs &kvs, const ConstSlice &key) : kvs_(kvs), key_(key)
+        GenericKvsEntryIteratorBase(Kvs &kvs, const ValidSlice &key) : kvs_(kvs), key_(ConstSlice::CreateFromValidSlice(key))
         {
         }
         virtual ~GenericKvsEntryIteratorBase() override
@@ -180,7 +180,7 @@ namespace HayaguiKvs
         {
             return kvs_.Get(options, key_, container);
         }
-        virtual Status Put(WriteOptions options, ConstSlice &value) override
+        virtual Status Put(WriteOptions options, ValidSlice &value) override
         {
             return kvs_.Put(options, key_, value);
         }

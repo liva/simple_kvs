@@ -78,6 +78,6 @@ private:
     } kvs_allocator_;
     VefsFile file_;
     VefsCharStorage char_storage_;
-    SkipListKvs<4> cache_kvs_;
+    SkipListKvs<12> cache_kvs_;
     CharStorageKvs kvs_;
 };

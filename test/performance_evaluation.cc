@@ -80,10 +80,13 @@ public:
     void Do()
     {
         START_TEST;
+        printf(",Put,Get\n");
         for (int i = 0; i < 8; i++)
         {
+            printf("%d,", i);
             MeasurePut(i);
             MeasureGet(i);
+            printf("\n");
         }
     }
 
@@ -108,7 +111,7 @@ private:
             }
             virtual void Print(uint64_t time) override
             {
-                printf(">>%s %luns\n", string_, time / kRequestNumPerMeasure);
+                printf("%lu,", time / kRequestNumPerMeasure);
             }
             const char *const string_;
         };
@@ -119,9 +122,11 @@ private:
         OneRequestTimeTaker time_taker("Put");
         for (int i = count * kRequestNumPerMeasure; i < (count + 1) * kRequestNumPerMeasure; i++)
         {
-            char buf[5];
-            sprintf(buf, "%04d", i);
-            if (kvs_container_->Put(WriteOptions(), ConstSlice(buf, 4), ConstSlice(buf, 4)).IsError())
+            char buf1[5];
+            sprintf(buf1, "%04d", i);
+            char buf2[41];
+            sprintf(buf2, "%040d", i);
+            if (kvs_container_->Put(WriteOptions(), ConstSlice(buf1, 4), ConstSlice(buf2, 40)).IsError())
             {
                 abort();
             }
@@ -134,8 +139,10 @@ private:
         {
             char buf[5];
             sprintf(buf, "%04d", i);
+            BufferPtrSlice key(buf, 4);
             SliceContainer container;
-            if (kvs_container_->Get(ReadOptions(), ConstSlice(buf, 4), container).IsError())
+            //            TimeTaker time_taker("GetInternal");
+            if (kvs_container_->Get(ReadOptions(), key, container).IsError())
             {
                 abort();
             }
@@ -165,10 +172,10 @@ static void test()
 int main()
 {
     memallocator_performance();
-    test<GenericKvsContainer<SimpleKvs>>();
-    test<GenericKvsContainer<LinkedListKvs>>();
-    test<HashKvsContainer>();
-    test<GenericKvsContainer<SkipListKvs<4>>>();
-    test<CharStorageKvsContainer>();
+    //test<GenericKvsContainer<SimpleKvs>>();
+    //test<GenericKvsContainer<LinkedListKvs>>();
+    //test<HashKvsContainer>();
+    test<GenericKvsContainer<SkipListKvs<12>>>();
+    //test<CharStorageKvsContainer>();
     return 0;
 }

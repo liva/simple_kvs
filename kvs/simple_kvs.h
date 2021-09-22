@@ -28,7 +28,7 @@ namespace HayaguiKvs
                 delete entries_[i];
             }
         }
-        virtual Status Get(ReadOptions options, const ConstSlice &key, SliceContainer &container) override
+        virtual Status Get(ReadOptions options, const ValidSlice &key, SliceContainer &container) override
         {
             for (int i = 0; i < kEntryNum; i++)
             {
@@ -43,7 +43,7 @@ namespace HayaguiKvs
             }
             return Status::CreateErrorStatus();
         }
-        virtual Status Put(WriteOptions options, const ConstSlice &key, const ConstSlice &value) override
+        virtual Status Put(WriteOptions options, const ValidSlice &key, const ValidSlice &value) override
         {
             for (int i = 0; i < kEntryNum; i++)
             {
@@ -70,7 +70,7 @@ namespace HayaguiKvs
             printf("error: buffer overflow (TODO: should be fixed)\n");
             return Status::CreateErrorStatus();
         }
-        virtual Status Delete(WriteOptions options, const ConstSlice &key) override
+        virtual Status Delete(WriteOptions options, const ValidSlice &key) override
         {
             for (int i = 0; i < kEntryNum; i++)
             {
@@ -87,13 +87,13 @@ namespace HayaguiKvs
         {
             return entries_[0]->GetIterator(*this);
         }
-        virtual KvsEntryIterator GetIterator(const ConstSlice &key) override
+        virtual KvsEntryIterator GetIterator(const ValidSlice &key) override
         {
             GenericKvsEntryIteratorBase *base = MemAllocator::alloc<GenericKvsEntryIteratorBase>();
             new (base) GenericKvsEntryIteratorBase(*this, key);
             return KvsEntryIterator(base);
         }
-        virtual Status FindNextKey(const ConstSlice &key, SliceContainer &container) override
+        virtual Status FindNextKey(const ValidSlice &key, SliceContainer &container) override
         {
             for (int i = 0; i < kEntryNum; i++)
             {
@@ -116,8 +116,8 @@ namespace HayaguiKvs
             virtual ~EntryInterface() = 0;
             virtual Status RetrieveKey(SliceContainer &container) const = 0;
             virtual Status RetrieveValue(SliceContainer &container) const = 0;
-            virtual bool DoesKeyMatch(const ConstSlice &key) const = 0;
-            virtual Status CmpKey(const ConstSlice &key, CmpResult &result) const = 0;
+            virtual bool DoesKeyMatch(const ValidSlice &key) const = 0;
+            virtual Status CmpKey(const ValidSlice &key, CmpResult &result) const = 0;
             virtual Optional<KvsEntryIterator> GetIterator(SimpleKvs &kvs) const = 0;
         };
         class InvalidEntry : public EntryInterface
@@ -131,11 +131,11 @@ namespace HayaguiKvs
             {
                 return Status::CreateErrorStatus();
             }
-            virtual bool DoesKeyMatch(const ConstSlice &key) const override
+            virtual bool DoesKeyMatch(const ValidSlice &key) const override
             {
                 return false;
             }
-            virtual Status CmpKey(const ConstSlice &key, CmpResult &result) const override
+            virtual Status CmpKey(const ValidSlice &key, CmpResult &result) const override
             {
                 return Status::CreateErrorStatus();
             }
@@ -147,7 +147,9 @@ namespace HayaguiKvs
         class ValidEntry : public EntryInterface
         {
         public:
-            ValidEntry(const ConstSlice &key, const ConstSlice &value) : key_(key), value_(value)
+            ValidEntry(const ValidSlice &key, const ValidSlice &value)
+                : key_(ConstSlice::CreateFromValidSlice(key)),
+                  value_(ConstSlice::CreateFromValidSlice(value))
             {
             }
             virtual Status RetrieveKey(SliceContainer &container) const override
@@ -160,11 +162,11 @@ namespace HayaguiKvs
                 container.Set(value_);
                 return Status::CreateOkStatus();
             }
-            virtual bool DoesKeyMatch(const ConstSlice &key) const override
+            virtual bool DoesKeyMatch(const ValidSlice &key) const override
             {
                 return key_.DoesMatch(key);
             }
-            virtual Status CmpKey(const ConstSlice &key, CmpResult &result) const override
+            virtual Status CmpKey(const ValidSlice &key, CmpResult &result) const override
             {
                 return key_.Cmp(key, result);
             }
@@ -179,7 +181,7 @@ namespace HayaguiKvs
             ConstSlice key_;
             ConstSlice value_;
         };
-        Status ShiftEntriesForward(const int start_index, const ConstSlice &key, const ConstSlice &value)
+        Status ShiftEntriesForward(const int start_index, const ValidSlice &key, const ValidSlice &value)
         {
             SliceContainer key_container, value_container;
             key_container.Set(key);
@@ -237,7 +239,7 @@ namespace HayaguiKvs
             delete entries_[i];
             entries_[i] = new InvalidEntry;
         }
-        Status PushValue(int i, const ConstSlice &key, const ConstSlice &value, SliceContainer &popped_key, SliceContainer &popped_value)
+        Status PushValue(int i, const ValidSlice &key, const ValidSlice &value, SliceContainer &popped_key, SliceContainer &popped_value)
         {
             if (entries_[i]->RetrieveKey(popped_key).IsOk())
             {
