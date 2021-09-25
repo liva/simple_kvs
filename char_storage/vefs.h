@@ -1,7 +1,7 @@
 #pragma once
 #include "char_storage/interface.h"
+#include "utils/buffer.h"
 #include <vefs.h>
-#include <utils/debug.h>
 
 namespace HayaguiKvs
 {
@@ -16,12 +16,12 @@ namespace HayaguiKvs
         {
             free(fname_);
         }
-        virtual Status Open()
+        virtual Status Open() override
         {
             inode_ = vefs_->Create(std::string(fname_), false);
             return Status::CreateOkStatus();
         }
-        virtual Status Append(const ValidSlice &slice)
+        virtual Status Append(const ValidSlice &slice) override
         {
             char *buf = (char *)malloc(slice.GetLen());
             if (slice.CopyToBuffer(buf).IsError())
@@ -36,20 +36,36 @@ namespace HayaguiKvs
             }
             return Status::CreateErrorStatus();
         }
-        virtual Status Read(const size_t offset, const int len, SliceContainer &container)
+        virtual Status Append(MultipleValidSliceContainerReaderInterface &multiple_slice_container) override
         {
-            char *buf = (char *)malloc(len);
-            Vefs::Status s = vefs_->Read(inode_, offset, len, buf);
-            if (s != Vefs::Status::kOk)
+            const int len = multiple_slice_container.GetSliceLen();
+            LocalBuffer buf(len);
+            if (multiple_slice_container.CopyToBuffer(buf.GetPtr()).IsError())
             {
-                free(buf);
+                abort();
+            }
+            Vefs::Status s = vefs_->Append(inode_, buf.GetPtr(), len);
+            if (s == Vefs::Status::kOk)
+            {
+                return Status::CreateOkStatus();
+            }
+            return Status::CreateErrorStatus();
+        }
+        virtual Status Read(const size_t offset, const int len, SliceContainer &container) override
+        {
+            if (vefs_->GetLen(inode_) < offset + len) {
                 return Status::CreateErrorStatus();
             }
-            container.Set(ConstSlice(buf, len));
-            free(buf);
+            LocalBuffer buf(len);
+            Vefs::Status s = vefs_->Read(inode_, offset, len, buf.GetPtr());
+            if (s != Vefs::Status::kOk)
+            {
+                return Status::CreateErrorStatus();
+            }
+            container.Set(ConstSlice(buf.GetPtr(), len));
             return Status::CreateOkStatus();
         }
-        virtual size_t GetLen() const
+        virtual size_t GetLen() const override
         {
             return vefs_->GetLen(inode_);
         }

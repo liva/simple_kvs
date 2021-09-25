@@ -5,6 +5,7 @@
 #include "utils/rtc.h"
 #include <new>
 #include <assert.h>
+
 #include "utils/debug.h"
 
 namespace HayaguiKvs
@@ -109,6 +110,37 @@ namespace HayaguiKvs
                 return value_ != nullptr;
             }
 
+            void Print()
+            {
+                printf("element: ");
+                key_.Print();
+                printf(",");
+                if (value_ == nullptr)
+                {
+                    printf("(unavailable)");
+                }
+                else
+                {
+                    value_->Print();
+                }
+            }
+            void PrintNext()
+            {
+                for (int i = kHeight - 1; i >= 0; i--)
+                {
+                    printf("%d: ", i);
+                    if (next_[i] == nullptr)
+                    {
+                        printf("(unavailable)");
+                    }
+                    else
+                    {
+                        next_[i]->Print();
+                    }
+                    printf("\n");
+                }
+            }
+
         private:
             void InitNextsWithNull()
             {
@@ -119,21 +151,19 @@ namespace HayaguiKvs
             }
             ConstSlice *DuplicateSlice(const ValidSlice &slice)
             {
-                ConstSlice *allocated_slice_ = MemAllocator::alloc<ConstSlice>();
-                new (allocated_slice_) ConstSlice(ConstSlice::CreateFromValidSlice(slice));
-                return allocated_slice_;
+                return new (buf_) ConstSlice(ConstSlice::CreateFromValidSlice(slice));
             }
             void ReleaseValue()
             {
                 if (value_)
                 {
                     value_->~ConstSlice();
-                    MemAllocator::free(value_);
                     value_ = nullptr;
                 }
             }
             ConstSlice key_;
             ConstSlice *value_;
+            char buf_[sizeof(ConstSlice)] __attribute__((aligned(8)));
             Element *next_[kHeight];
         };
 
@@ -357,7 +387,7 @@ namespace HayaguiKvs
                     prev[focused_level_] = ele_;
                     if (focused_level_ == 0)
                     {
-                        return processor.ProcessTheCaseOfNextGreaterThanTheKey(prev);
+                        return processor.ProcessTheCaseOfNoMoreEntries(prev);
                     }
                     Container container_at_the_lower_level(ele_, focused_level_ - 1, rnd_);
                     return container_at_the_lower_level.Walk(prev, processor);

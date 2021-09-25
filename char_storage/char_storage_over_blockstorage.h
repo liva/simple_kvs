@@ -146,6 +146,10 @@ namespace HayaguiKvs
             }
             return Status::CreateOkStatus();
         }
+        virtual Status Append(MultipleValidSliceContainerReaderInterface &multiple_slice_container) override
+        {
+            return AppendHelper(multiple_slice_container);
+        }
         virtual Status Read(const size_t offset, const int len, SliceContainer &container) override
         {
             const size_t file_len = GetLen();

@@ -29,7 +29,6 @@ namespace HayaguiKvs
         virtual void Print() const = 0;
         virtual Status GetLen(int &len) const = 0;
         virtual Status CopyToBuffer(char *buf) const = 0;
-        virtual Status CopyToBufferWithRegion(char *buf, const size_t offset, const size_t len) const = 0;
     };
     inline Slice::~Slice() {}
 
@@ -86,10 +85,6 @@ namespace HayaguiKvs
             return Status::CreateErrorStatus();
         }
         virtual Status CopyToBuffer(char *buf) const override
-        {
-            return Status::CreateErrorStatus();
-        }
-        virtual Status CopyToBufferWithRegion(char *buf, const size_t offset, const size_t len) const override
         {
             return Status::CreateErrorStatus();
         }
@@ -169,7 +164,7 @@ namespace HayaguiKvs
     protected:
         friend class BufferPtrSlice;
         friend class ShrinkedSlice;
-        virtual Status CopyToBufferWithRegion(char *buf, const size_t offset, const size_t len) const override final
+        Status CopyToBufferWithRegion(char *buf, const size_t offset, const size_t len) const
         {
             if (offset + len > GetLen())
             {
@@ -189,25 +184,9 @@ namespace HayaguiKvs
     };
     inline ValidSlice::~ValidSlice() {}
 
-    //class ConstSlice;
-
     class ShrinkedSlice : public ValidSlice
     {
     public:
-        /*ShrinkedSlice(const ConstSlice &slice, const size_t offset, const size_t len)
-            : underlying_slice_((const ValidSlice &)slice),
-              offset_(offset),
-              len_(len)
-        {
-            assert(offset + len <= underlying_slice_.GetLen());
-        }
-        ShrinkedSlice(const ShrinkedSlice &slice, const size_t offset, const size_t len)
-            : underlying_slice_((const ValidSlice &)slice),
-              offset_(offset),
-              len_(len)
-        {
-            assert(offset + len <= underlying_slice_.GetLen());
-        }*/
         ShrinkedSlice(const ValidSlice &slice, const size_t offset, const size_t len)
             : underlying_slice_(slice),
               offset_(offset),
@@ -528,7 +507,7 @@ namespace HayaguiKvs
             obj.slice_ = nullptr;
         }
         ConstSlice *slice_;
-        char buf_[sizeof(ConstSlice)] __attribute__ ((aligned (8)));
+        char buf_[sizeof(ConstSlice)] __attribute__((aligned(8)));
     };
 
     inline Status ValidSlice::SetToContainer(SliceContainer &container) const

@@ -72,7 +72,7 @@ private:
         }
         virtual void Print(uint64_t time) override
         {
-            printf(">>%s %luns\n", string_, time);
+            printf(">>>%s : %luns\n", string_, time);
         }
         const char *const string_;
     };

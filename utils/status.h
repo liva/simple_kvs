@@ -49,7 +49,7 @@ namespace HayaguiKvs
 
     private:
         Status() = delete;
-        Status(const int value)
+        explicit Status(const int value)
         {
             value_ = value;
         }

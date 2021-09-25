@@ -2,6 +2,7 @@
 #include "block_storage/block_storage_multiplier.h"
 #include "block_storage/block_storage_with_cache.h"
 #include "utils/slice.h"
+#include "utils/multipleslice_container.h"
 #include <assert.h>
 #include <string.h>
 
@@ -66,13 +67,25 @@ namespace HayaguiKvs
         RandomReadCharStorageInterface &underlying_storage_;
     };
 
-
     struct AppendCharStorageInterface
     {
         virtual ~AppendCharStorageInterface() = 0;
         virtual Status Open() = 0;
         virtual Status Append(const ValidSlice &slice) = 0;
+        virtual Status Append(MultipleValidSliceContainerReaderInterface &multiple_slice_container) = 0;
         virtual size_t GetLen() const = 0;
+
+    protected:
+        Status AppendHelper(MultipleValidSliceContainerReaderInterface &multiple_slice_container)
+        {
+            for (int i = 0; i < multiple_slice_container.GetLen(); i++)
+            {
+                if (Append(*multiple_slice_container.Get()).IsError()) {
+                    return Status::CreateErrorStatus();
+                }
+            }
+            return Status::CreateOkStatus();
+        }
     };
     AppendCharStorageInterface::~AppendCharStorageInterface() {}
 

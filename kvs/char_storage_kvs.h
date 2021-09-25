@@ -33,9 +33,10 @@ namespace HayaguiKvs
         }
         virtual Status Put(WriteOptions options, const ValidSlice &key, const ValidSlice &value) override
         {
-            MultipleValidSliceContainer<3> container;
-            ConstSlice signature = Signature::CreatePutSignature();
-            container.Set(&signature);
+            const ValidSlice *slices[3];
+            MultipleValidSliceContainer container(slices, 3);
+            Signature::PutSignature signature;
+            container.Set(&signature.GetSlice());
             container.Set(&key);
             container.Set(&value);
             if (log_.AppendEntries(container).IsError())
@@ -46,11 +47,12 @@ namespace HayaguiKvs
         }
         virtual Status Delete(WriteOptions options, const ValidSlice &key) override
         {
-            if (Signature::StoreDeleteSignature(log_).IsError())
-            {
-                return Status::CreateErrorStatus();
-            }
-            if (log_.AppendEntry(key).IsError())
+            const ValidSlice *slices[2];
+            MultipleValidSliceContainer container(slices, 2);
+            Signature::DeleteSignature signature;
+            container.Set(&signature.GetSlice());
+            container.Set(&key);
+            if (log_.AppendEntries(container).IsError())
             {
                 return Status::CreateErrorStatus();
             }
@@ -145,17 +147,6 @@ namespace HayaguiKvs
         class Signature
         {
         public:
-            static Status StoreDeleteSignature(LogAppender &log)
-            {
-                const uint8_t value = kSignatureDelete;
-                ConstSlice signature((const char *)&value, 1);
-                return log.AppendEntry(signature);
-            }
-            static ConstSlice CreatePutSignature()
-            {
-                const uint8_t value = kSignaturePut;
-                return ConstSlice((const char *)&value, 1);
-            }
             static Status RetrieveSignature(LogReader &log, uint8_t &signature)
             {
                 SliceContainer signature_container;
@@ -174,6 +165,38 @@ namespace HayaguiKvs
                 }
                 return signature_container.CopyToBuffer((char *)&signature);
             }
+
+            class DeleteSignature
+            {
+            public:
+                DeleteSignature() : slice_(buf_, 1)
+                {
+                    buf_[0] = kSignatureDelete;
+                }
+                ValidSlice &GetSlice()
+                {
+                    return slice_;
+                }
+            private:
+                char buf_[1];
+                BufferPtrSlice slice_;
+            };
+            class PutSignature
+            {
+            public:
+                PutSignature() : slice_(buf_, 1)
+                {
+                    buf_[0] = kSignaturePut;
+                }
+                ValidSlice &GetSlice()
+                {
+                    return slice_;
+                }
+            private:
+                char buf_[1];
+                BufferPtrSlice slice_;
+            };
+
             static const uint8_t kSignaturePut = 0;
             static const uint8_t kSignatureDelete = 1;
         };

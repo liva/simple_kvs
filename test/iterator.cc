@@ -35,7 +35,7 @@ struct TestKvsEntryIteratorBase final : public KvsEntryIteratorBaseInterface
     {
         return Status::CreateOkStatus();
     }
-    virtual Status Put(WriteOptions options, ConstSlice &value) override final
+    virtual Status Put(WriteOptions options, ValidSlice &value) override final
     {
         return Status::CreateOkStatus();
     }
@@ -293,6 +293,7 @@ private:
 template <class KvsContainer>
 static void test()
 {
+    START_TEST_WITH_POSTFIX(typeid(KvsContainer).name());
     {
         KvsContainer kvs_container;
         DestroyTester tester(kvs_container);

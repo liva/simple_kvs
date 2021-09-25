@@ -16,13 +16,6 @@ namespace HayaguiKvs
             : value_(value)
         {
         }
-        ConstSlice CreateConstSlice() const
-        {
-            const int kBufferSize = sizeof(uint64_t);
-            char buf[kBufferSize];
-            memcpy(buf, &value_, kBufferSize);
-            return ConstSlice(buf, kBufferSize);
-        }
         static const OptionalForConstObj<UnsignedInt64ForLogInfo> ReadFromStorage(SequentialReadCharStorageInterface &char_storage)
         {
             SliceContainer container;
@@ -42,6 +35,23 @@ namespace HayaguiKvs
         }
 
         const uint64_t value_;
+    };
+    class UnsignedInt64ForLogInfoSliceContainer
+    {
+    public:
+        UnsignedInt64ForLogInfoSliceContainer(const uint64_t value)
+            : slice_(buf_, sizeof(uint64_t))
+        {
+            *(uint64_t *)buf_ = value;
+        }
+        ValidSlice &GetSlice()
+        {
+            return slice_;
+        }
+
+    private:
+        char buf_[sizeof(uint64_t)];
+        BufferPtrSlice slice_;
     };
     class LogReader
     {
@@ -91,15 +101,16 @@ namespace HayaguiKvs
         {
             return char_storage_.Open();
         }
-        Status AppendEntries(MultipleValidSliceContainerInterface &multiple_slice_container)
+        Status AppendEntries(MultipleValidSliceContainerReaderInterface &entries)
         {
-            const ValidSlice *slices[multiple_slice_container.GetLen() * 2];
-            return AppendEntriesSub(slices, 0, multiple_slice_container);
+            const ValidSlice *slices[entries.GetLen() * 2];
+            MultipleValidSliceContainer written_slices(slices, entries.GetLen() * 2);
+            return AppendEntriesSub(written_slices, entries);
         }
         Status AppendEntry(const ValidSlice &obj)
         {
-            UnsignedInt64ForLogInfo len(obj.GetLen());
-            if (char_storage_.Append(len.CreateConstSlice()).IsError())
+            UnsignedInt64ForLogInfoSliceContainer len(obj.GetLen());
+            if (char_storage_.Append(len.GetSlice()).IsError())
             {
                 return Status::CreateErrorStatus();
             }
@@ -107,22 +118,19 @@ namespace HayaguiKvs
         }
 
     private:
-        Status AppendEntriesSub(const ValidSlice **slices, const int index, MultipleValidSliceContainerInterface &multiple_slice_container)
+        Status AppendEntriesSub(MultipleValidSliceContainer &written_slices, MultipleValidSliceContainerReaderInterface &entries)
         {
-            const ValidSlice *slice = multiple_slice_container.Get();
-            UnsignedInt64ForLogInfo len(slice->GetLen());
-            ConstSlice len_slice = len.CreateConstSlice();
-            slices[index * 2] = &len_slice;
-            slices[index * 2 + 1] = slice;
-            const int slice_count = multiple_slice_container.GetLen();
-            if (index + 1 == slice_count)
+            const ValidSlice *slice = entries.Get();
+            UnsignedInt64ForLogInfoSliceContainer len(slice->GetLen());
+            written_slices.Set(&len.GetSlice());
+            written_slices.Set(slice);
+            if (written_slices.GetLen() == entries.GetLen() * 2)
             {
-                ConstSlice concatinated_slice = ConstSlice::CreateConstSliceFromSlices(slices, slice_count * 2);
-                return char_storage_.Append(concatinated_slice);
+                return char_storage_.Append(written_slices);
             }
             else
             {
-                return AppendEntriesSub(slices, index + 1, multiple_slice_container);
+                return AppendEntriesSub(written_slices, entries);
             }
         }
         AppendCharStorageInterface &char_storage_;
