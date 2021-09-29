@@ -3,7 +3,7 @@ from scripts import *
 import shutil
 
 class Test:
-    def __init__(self, env, source_files, run_cnt):
+    def __init__(self, env, source_files, run_cnt = 1):
         self.env = env
         self.source_files = source_files
         self.storage = UioNvme()
@@ -31,7 +31,7 @@ conf = {
     "ve": True,
     #"gdb": True,
     #"performance_evaluation_only": True
-    "benchmark": True
+    #"benchmark": True
 }
 def main():
     env = get_env('output', **conf)
