@@ -323,6 +323,16 @@ namespace HayaguiKvs
         ConstSlice(const char *const buf, const int len) : BufferPtrSlice(DuplicateBuffer(buf, len), len)
         {
         }
+        ConstSlice(ConstSlice &&obj) : BufferPtrSlice(std::move(obj))
+        {
+        }
+        virtual ~ConstSlice()
+        {
+            if (buf_ != nullptr)
+            {
+                MemAllocator::free(const_cast<char *>(buf_));
+            }
+        }
         static ConstSlice CreateFromValidSlice(const ValidSlice &slice)
         {
             return ConstSlice(slice);
@@ -348,16 +358,6 @@ namespace HayaguiKvs
 
             PreAllocatedBuffer pre_allocated_buffer = {buf, len};
             return ConstSlice(pre_allocated_buffer);
-        }
-        ConstSlice(ConstSlice &&obj) : BufferPtrSlice(std::move(obj))
-        {
-        }
-        virtual ~ConstSlice()
-        {
-            if (buf_ != nullptr)
-            {
-                MemAllocator::free(const_cast<char *>(buf_));
-            }
         }
         virtual void PrintWithRegion(const Region region) const override final
         {
@@ -404,17 +404,24 @@ namespace HayaguiKvs
         {
             Release();
         }
+        SliceContainer(const ValidSlice &slice)
+        {
+            slice_ = new (buf_) ConstSlice(ConstSlice::CreateFromValidSlice(slice));
+        }
         SliceContainer(const SliceContainer &) = delete;
         SliceContainer &operator=(const SliceContainer &) = delete;
-        SliceContainer &operator=(SliceContainer &&obj)
-        {
-            slice_ = obj.slice_;
-            MarkUsedFlagToMovedObj(std::move(obj));
-            return *this;
-        }
         Status Set(const Slice *slice)
         {
             return slice->SetToContainer(*this);
+        }
+        void Set(const SliceContainer &obj)
+        {
+            Release();
+            if (!obj.slice_)
+            {
+                return;
+            }
+            slice_ = new (buf_) ConstSlice(ConstSlice::CreateFromValidSlice(*obj.slice_));
         }
         void Set(const ValidSlice &slice)
         {
@@ -472,7 +479,12 @@ namespace HayaguiKvs
         }
         void Print() const
         {
-            return slice_->Print();
+            printf("SC<");
+            if (slice_)
+            {
+                slice_->Print();
+            }
+            printf(">(ptr: %p)", slice_);
         }
         Status GetLen(int &len) const
         {
@@ -502,10 +514,6 @@ namespace HayaguiKvs
         }
 
     private:
-        void MarkUsedFlagToMovedObj(SliceContainer &&obj)
-        {
-            obj.slice_ = nullptr;
-        }
         ConstSlice *slice_;
         char buf_[sizeof(ConstSlice)] __attribute__((aligned(8)));
     };

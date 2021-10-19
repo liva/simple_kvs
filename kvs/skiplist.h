@@ -6,8 +6,6 @@
 #include <new>
 #include <assert.h>
 
-#include "utils/debug.h"
-
 namespace HayaguiKvs
 {
     template <int kHeight>

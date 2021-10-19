@@ -127,7 +127,7 @@ namespace HayaguiKvs
             {
                 if (!container_.IsSliceAvailable())
                 {
-                    container_ = std::move(obj);
+                    container_.Set(obj);
                 }
                 else
                 {
@@ -138,7 +138,7 @@ namespace HayaguiKvs
                     }
                     if (result.IsGreater())
                     {
-                        container_ = std::move(obj);
+                        container_.Set(obj);
                     }
                 }
             }
@@ -156,7 +156,7 @@ namespace HayaguiKvs
                 {
                     return Status::CreateErrorStatus();
                 }
-                container = std::move(container_);
+                container.Set(container_);
                 return Status::CreateOkStatus();
             }
 
