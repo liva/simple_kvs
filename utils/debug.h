@@ -9,4 +9,5 @@
 
 #define EMBED_DEBUG_SIGNATURE int signature_ = 0xbeefcafe;
 #define CHECK_DEBUG_SIGNATURE(that) assert((that).signature_ == 0xbeefcafe);
+// for move & destructor
 #define ERASE_DEBUG_SIGNATURE signature_ = -1;

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 from scripts import *
 import shutil
 
@@ -27,24 +27,17 @@ def format(fname):
     parser.parse()
     parser.output('num', 'name', "formatted_output")
 
-conf = {
-    "ve": True,
-    #"gdb": True,
-    #"performance_evaluation_only": True
-    #"benchmark": True
-}
-def main():
+def build_and_test(update_detector):
     env = get_env('output', **conf)
     if (not 'benchmark' in conf) or not conf["benchmark"]:
-        if (not 'performance_evaluation_only' in conf) or not conf["performance_evaluation_only"]:
-            Test(env, "test/optional.cc").build_and_run()
-            Test(env, "test/status.cc").build_and_run()
-            Test(env, "test/slice.cc").build_and_run()
-            Test(env, "test/block_storage.cc").build_and_run()
-            Test(env, "test/char_storage.cc").build_and_run()
-            Test(env, "test/simple_io.cc").build_and_run()
-            Test(env, "test/iterator.cc").build_and_run()
-            Test(env, "test/persistence.cc").build_and_run()
+        Test(env, "test/optional.cc").build_and_run()
+        Test(env, "test/status.cc").build_and_run()
+        Test(env, "test/slice.cc").build_and_run()
+        Test(env, "test/block_storage.cc").build_and_run()
+        Test(env, "test/char_storage.cc").build_and_run()
+        Test(env, "test/simple_io.cc").build_and_run()
+        Test(env, "test/iterator.cc").build_and_run()
+        Test(env, "test/persistence.cc").build_and_run()
         Test(env, "test/performance_evaluation.cc").build_and_run('-DNDEBUG')
     else:
         env.write_now()
@@ -57,7 +50,7 @@ def main():
 
     #shell.call("docker run --rm -it -v $PWD:$PWD -w $PWD unvme:ve /opt/nec/nosupport/llvm-ve/bin/clang++ -g3 -O2 --target=ve-linux -static --std=c++11 -o main main.cc -L/opt/nec/nosupport/llvm-ve/lib/clang/10.0.0/lib/linux -lclang_rt.builtins-ve  -lpthread -lm -lc ")
     #shell.check_call("./main")
-
+    
     shell.call("docker rm -f simple_kvs")
     shell.check_call("docker run -d --name simple_kvs -it -v $PWD:$PWD -w $PWD leveldb:ve sh")
     shell.call("docker exec -it simple_kvs cp -r *.h /opt/nec/ve/include")
@@ -66,6 +59,19 @@ def main():
     shell.check_call("docker exec -it simple_kvs cp -r utils block_storage char_storage kvs /opt/nec/ve/ex_include")
     shell.check_call("docker commit simple_kvs simple_kvs:ve")
     shell.check_call("docker rm -f simple_kvs")
+    
+    update_detector.record('')
+
+conf = {
+    "ve": True,
+    #"gdb": True,
+    # "benchmark": True,
+    #"force_test": True,
+}
+def main():
+    update_detector = UpdateDetector(['leveldb:ve'])
+    if (('force_test' in conf) and conf["force_test"]) or update_detector.is_newfile_available():
+        build_and_test(update_detector)
 
 if __name__ == "__main__":
     main()
