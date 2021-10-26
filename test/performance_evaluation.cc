@@ -2,7 +2,7 @@
 #include "./test.h"
 #include "./kvs_misc.h"
 #include "misc.h"
-#include "utils/rtc.h"
+#include "common/rtc.h"
 #include <assert.h>
 #include <utility>
 

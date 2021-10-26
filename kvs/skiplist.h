@@ -2,7 +2,7 @@
 #include "kvs_interface.h"
 #include "utils/allocator.h"
 #include "utils/rnd.h"
-#include "utils/rtc.h"
+#include "common/rtc.h"
 #include <new>
 #include <assert.h>
 

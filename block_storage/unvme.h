@@ -1,6 +1,6 @@
 #pragma once
 #include "block_storage_interface.h"
-#include "utils/rtc.h"
+#include "common/rtc.h"
 #include <assert.h>
 #include <unvme.h>
 #include <unvme_nvme.h>

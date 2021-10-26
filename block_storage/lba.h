@@ -45,11 +45,11 @@ namespace HayaguiKvs
     private:
         int raw_address_;
     };
-    LogicalBlockAddress operator+(const LogicalBlockAddress &a, const LogicalBlockAddress &b)
+    inline LogicalBlockAddress operator+(const LogicalBlockAddress &a, const LogicalBlockAddress &b)
     {
         return LogicalBlockAddress(a.raw_address_ + b.raw_address_);
     }
-    int operator-(const LogicalBlockAddress &a, const LogicalBlockAddress &b)
+    inline int operator-(const LogicalBlockAddress &a, const LogicalBlockAddress &b)
     {
         return a.raw_address_ - b.raw_address_;
     }

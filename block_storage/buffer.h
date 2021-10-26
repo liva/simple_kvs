@@ -80,7 +80,7 @@ namespace HayaguiKvs
         static const size_t kSize = 512;
     protected:
     };
-    BlockBufferInterface::~BlockBufferInterface()
+    inline BlockBufferInterface::~BlockBufferInterface()
     {
     }
 
@@ -210,7 +210,7 @@ namespace HayaguiKvs
             CopyOneBlock(index.Inc(), OffsetInBlockBuffer(0), next_region);
         }
     };
-    BlockBufferCopierInterface::~BlockBufferCopierInterface()
+    inline BlockBufferCopierInterface::~BlockBufferCopierInterface()
     {
     }
     template <class BlockBuffer>

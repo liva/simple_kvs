@@ -87,7 +87,7 @@ namespace HayaguiKvs
             return Status::CreateOkStatus();
         }
     };
-    AppendCharStorageInterface::~AppendCharStorageInterface() {}
+    inline AppendCharStorageInterface::~AppendCharStorageInterface() {}
 
     struct AppendOnlyCharStorageInterface : public RandomReadCharStorageInterface, public AppendCharStorageInterface
     {

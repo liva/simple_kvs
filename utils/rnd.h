@@ -90,7 +90,7 @@ namespace HayaguiKvs
         uint32_t Skewed(int max_log) { return Uniform(1 << Uniform(max_log + 1)); }
     };
 
-    int RandomHeight(const int max_height, Random &rnd)
+    inline int RandomHeight(const int max_height, Random &rnd)
     {
         // Increase height with probability 1 in kBranching
         static const unsigned int kBranching = 4;
