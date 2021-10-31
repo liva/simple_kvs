@@ -4,6 +4,7 @@
 #include "utils/slice.h"
 #include "utils/optional.h"
 #include "utils/multipleslice_container.h"
+#include "utils/allocator.h"
 #include <string.h>
 #include <stdint.h>
 
@@ -103,8 +104,8 @@ namespace HayaguiKvs
         }
         Status AppendEntries(MultipleValidSliceContainerReaderInterface &entries)
         {
-            const ValidSlice *slices[entries.GetLen() * 2];
-            MultipleValidSliceContainer written_slices(slices, entries.GetLen() * 2);
+            LocalBufferAllocator::Container buf_container = LocalBufferAllocator::Get()->Alloc(sizeof(ValidSlice *) * entries.GetLen() * 2);
+            MultipleValidSliceContainer written_slices(buf_container.GetPtr<const ValidSlice *>(), entries.GetLen() * 2);
             return AppendEntriesSub(written_slices, entries);
         }
         Status AppendEntry(const ValidSlice &obj)

@@ -2,9 +2,11 @@
 #include <cstdlib>
 #include <memory>
 #include <stdint.h>
+#include <stdio.h>
 
 namespace HayaguiKvs
 {
+    // deprecated. use GlobalBufferAllocator instead
     class MemAllocator
     {
     public:
@@ -47,6 +49,74 @@ namespace HayaguiKvs
             std::free(buf);
         }
     };
+    class BufContainerSignature
+    {
+    public:
+        BufContainerSignature(uint64_t *signature) : signature_(signature)
+        {
+            SetSignature();
+        }
+        BufContainerSignature(BufContainerSignature &&obj) : signature_(obj.signature_)
+        {
+            CheckSignature();
+            obj.signature_ = nullptr;
+        }
+        ~BufContainerSignature()
+        {
+            CheckAndClearSignature();
+        }
+
+        BufContainerSignature &operator=(BufContainerSignature &&obj)
+        {
+            CheckAndClearSignature();
+            signature_ = obj.signature_;
+            CheckSignature();
+            obj.signature_ = nullptr;
+            return *this;
+        }
+
+        void CheckAndClearSignature()
+        {
+            if (!signature_)
+            {
+                return;
+            }
+            CheckSignature();
+            if (kDebug)
+            {
+                printf("signature at %p confirmed\n", signature_);
+            }
+            *signature_ = 0;
+            signature_ = nullptr;
+        }
+
+    private:
+        void SetSignature()
+        {
+            if (!signature_)
+            {
+                return;
+            }
+            *signature_ = 0xdeadbeefcafe;
+            if (kDebug)
+            {
+                printf("signature location: %p\n", signature_);
+            }
+        }
+        void CheckSignature()
+        {
+            if (signature_ && *signature_ != 0xdeadbeefcafe)
+            {
+                if (kDebug)
+                {
+                    printf("buffer overflow detected (signature at %p corrupted)\n", signature_);
+                }
+                abort();
+            }
+        }
+        uint64_t *signature_;
+        static const bool kDebug = false;
+    };
     class LocalBufferAllocator
     {
     private:
@@ -64,24 +134,22 @@ namespace HayaguiKvs
                 }
                 void *rval = (void *)(buf_ + offset_);
                 offset_ += len;
-                return rval;
-            }
-            void Ref()
-            {
                 ref_cnt_++;
+                return rval;
             }
             void Unref()
             {
                 ref_cnt_--;
                 if (ref_cnt_ == 0)
                 {
+                    MemAllocatorInterface &base_allocator = base_allocator_;
                     this->~Pool();
-                    base_allocator_.free(this);
+                    base_allocator.free(this);
                 }
             }
 
         private:
-            int ref_cnt_ = 0;
+            int ref_cnt_ = 1;
             int offset_ = 0;
             MemAllocatorInterface &base_allocator_;
             static const size_t kSize = 16 * 1024 - 32;
@@ -92,29 +160,56 @@ namespace HayaguiKvs
         class Container
         {
         public:
-            Container(Pool *pool, MemAllocatorInterface &base_allocator, void *buf) : pool_(pool), buf_(buf), base_allocator_(base_allocator)
+            Container(Pool *pool, MemAllocatorInterface &base_allocator, void *buf, size_t len) : pool_(pool), buf_(buf), base_allocator_(base_allocator), signature_((uint64_t *)((char *)buf + len))
             {
+            }
+            Container(Container &&obj) : pool_(obj.pool_), buf_(obj.buf_), base_allocator_(obj.base_allocator_), signature_(std::move(obj.signature_))
+            {
+                obj.buf_ = nullptr;
+                obj.pool_ = nullptr;
+            }
+            Container(const Container &obj) = delete;
+            Container &operator=(const Container &) = delete;
+            Container &operator=(Container &&obj)
+            {
+                signature_ = std::move(obj.signature_);
+                ReleaseBuffer();
+                buf_ = obj.buf_;
+                pool_ = obj.pool_;
+                obj.buf_ = nullptr;
+                obj.pool_ = nullptr;
+                return *this;
             }
             ~Container()
             {
+                signature_.CheckAndClearSignature();
+                ReleaseBuffer();
+            }
+            template <class T>
+            T *GetPtr()
+            {
+                return reinterpret_cast<T *>(buf_);
+            }
+
+        private:
+            void ReleaseBuffer()
+            {
                 if (pool_ == nullptr)
                 {
-                    base_allocator_.free(buf_);
+                    if (buf_)
+                    {
+                        base_allocator_.free(buf_);
+                    }
                 }
                 else
                 {
                     pool_->Unref();
                 }
             }
-            void *GetPtr()
-            {
-                return buf_;
-            }
-
-        private:
             Pool *pool_;
             void *buf_;
             MemAllocatorInterface &base_allocator_;
+            BufContainerSignature signature_;
         };
 
         ~LocalBufferAllocator()
@@ -145,16 +240,16 @@ namespace HayaguiKvs
         {
             if (len >= 4096)
             {
-                return Container(nullptr, base_allocator_, base_allocator_.alloc(len));
+                return Container(nullptr, base_allocator_, base_allocator_.alloc(len + 8), len);
             }
-            void *buf = cur_pool_->Alloc(len);
+            void *buf = cur_pool_->Alloc(len + 8);
             if (buf == nullptr)
             {
                 cur_pool_->Unref();
                 cur_pool_ = AllocateCurrentPool(base_allocator_);
-                buf = cur_pool_->Alloc(len);
+                buf = cur_pool_->Alloc(len + 8);
             }
-            return Container(cur_pool_, base_allocator_, buf);
+            return Container(cur_pool_, base_allocator_, buf, len);
         }
 
     private:
@@ -164,7 +259,6 @@ namespace HayaguiKvs
         static Pool *AllocateCurrentPool(MemAllocatorInterface &base_allocator)
         {
             Pool *cur_pool = new (base_allocator.alloc(sizeof(Pool))) Pool(base_allocator);
-            cur_pool->Ref();
             return cur_pool;
         }
         static std::unique_ptr<LocalBufferAllocator> allocator_;
@@ -172,4 +266,86 @@ namespace HayaguiKvs
     };
 
     std::unique_ptr<LocalBufferAllocator> LocalBufferAllocator::allocator_ __attribute__((weak));
+
+    class GlobalBufferAllocator
+    {
+    public:
+        class Container
+        {
+        public:
+            Container(MemAllocatorInterface &base_allocator, void *buf, size_t len) : buf_(buf), base_allocator_(base_allocator), signature_((uint64_t *)((char *)buf + len))
+            {
+            }
+            Container(Container &&obj) : buf_(obj.buf_), base_allocator_(obj.base_allocator_), signature_(std::move(obj.signature_))
+            {
+                obj.buf_ = nullptr;
+            }
+            Container(const Container &obj) = delete;
+            Container &operator=(const Container &) = delete;
+            Container &operator=(Container &&obj)
+            {
+                signature_ = std::move(obj.signature_);
+                ReleaseBuffer();
+                buf_ = obj.buf_;
+                obj.buf_ = nullptr;
+                return *this;
+            }
+            ~Container()
+            {
+                signature_.CheckAndClearSignature();
+                ReleaseBuffer();
+            }
+            template <class T>
+            T *GetPtr()
+            {
+                return reinterpret_cast<T *>(buf_);
+            }
+
+        private:
+            void ReleaseBuffer()
+            {
+                if (buf_)
+                {
+                    base_allocator_.free(buf_);
+                }
+            }
+            void *buf_;
+            MemAllocatorInterface &base_allocator_;
+            BufContainerSignature signature_;
+        };
+
+        static GlobalBufferAllocator *Get()
+        {
+            if (!allocator_)
+            {
+                return ResetWithDefaultAllocator();
+            }
+            return allocator_.get();
+        }
+        // mainly for unit tests
+        static GlobalBufferAllocator *ResetWithBaseAllocator(MemAllocatorInterface &base_allocator)
+        {
+            allocator_.reset(new GlobalBufferAllocator(base_allocator));
+            return allocator_.get();
+        }
+        // mainly for unit tests
+        static GlobalBufferAllocator *ResetWithDefaultAllocator()
+        {
+            allocator_.reset(new GlobalBufferAllocator(*(new MallocBasedMemAllocator())));
+            return allocator_.get();
+        }
+        Container Alloc(size_t len)
+        {
+            return Container(base_allocator_, base_allocator_.alloc(len + 8), len);
+        }
+
+    private:
+        GlobalBufferAllocator(MemAllocatorInterface &base_allocator) : base_allocator_(base_allocator)
+        {
+        }
+        static std::unique_ptr<GlobalBufferAllocator> allocator_;
+        MemAllocatorInterface &base_allocator_;
+    };
+
+    std::unique_ptr<GlobalBufferAllocator> GlobalBufferAllocator::allocator_ __attribute__((weak));
 }

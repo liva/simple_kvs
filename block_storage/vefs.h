@@ -15,11 +15,18 @@ namespace HayaguiKvs
         }
         virtual ~VefsBlockStorage()
         {
+            if (inode_)
+            {
+                vefs_->SoftSync(inode_);
+            }
             free(fname_);
         }
         virtual Status Open() override
         {
-            inode_ = vefs_->Create(std::string(fname_), false);
+            if (!inode_)
+            {
+                inode_ = vefs_->Create(std::string(fname_), false);
+            }
             return Status::CreateOkStatus();
         }
         virtual LogicalBlockAddress GetMaxAddress() const override
@@ -61,6 +68,6 @@ namespace HayaguiKvs
         static const int kNumBlocks = 4192;
         char *const fname_;
         Vefs *vefs_;
-        Inode *inode_;
+        Inode *inode_ = nullptr;
     };
 }

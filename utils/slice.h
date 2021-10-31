@@ -313,25 +313,31 @@ namespace HayaguiKvs
         int len_;
     };
 
-    class ConstSlice : public BufferPtrSlice
+    class ConstSliceHelper : public BufferPtrSlice
+    {
+    protected:
+        ConstSliceHelper() = delete;
+        GlobalBufferAllocator::Container buf_container_;
+        ConstSliceHelper(GlobalBufferAllocator::Container &&buf_container, size_t len) : BufferPtrSlice(buf_container.GetPtr<const char>(), len), buf_container_(std::move(buf_container))
+        {
+        }
+    };
+
+    class ConstSlice : public ConstSliceHelper
     {
     public:
         ConstSlice() = delete;
-        ConstSlice(const ConstSlice &slice) : BufferPtrSlice(DuplicateBuffer(slice), slice.GetLen())
+        ConstSlice(const ConstSlice &slice) : ConstSliceHelper(std::move(DuplicateBuffer(slice)), slice.GetLen())
         {
         }
-        ConstSlice(const char *const buf, const int len) : BufferPtrSlice(DuplicateBuffer(buf, len), len)
+        ConstSlice(const char *const buf, const int len) : ConstSliceHelper(std::move(DuplicateBuffer(buf, len)), len)
         {
         }
-        ConstSlice(ConstSlice &&obj) : BufferPtrSlice(std::move(obj))
+        ConstSlice(ConstSlice &&obj) : ConstSliceHelper(std::move(obj))
         {
         }
         virtual ~ConstSlice()
         {
-            if (buf_ != nullptr)
-            {
-                MemAllocator::free(const_cast<char *>(buf_));
-            }
         }
         static ConstSlice CreateFromValidSlice(const ValidSlice &slice)
         {
@@ -344,7 +350,8 @@ namespace HayaguiKvs
             {
                 len += slices[i]->GetLen();
             }
-            char *const buf = (char *)MemAllocator::alloc(len);
+            GlobalBufferAllocator::Container buf_container = GlobalBufferAllocator::Get()->Alloc(len);
+            char *const buf = buf_container.GetPtr<char>();
 
             int offset = 0;
             for (int i = 0; i < cnt; i++)
@@ -356,8 +363,7 @@ namespace HayaguiKvs
                 offset += slices[i]->GetLen();
             }
 
-            PreAllocatedBuffer pre_allocated_buffer = {buf, len};
-            return ConstSlice(pre_allocated_buffer);
+            return ConstSlice(std::move(buf_container), (size_t)len);
         }
         virtual void PrintWithRegion(const Region region) const override final
         {
@@ -365,31 +371,26 @@ namespace HayaguiKvs
         }
 
     private:
-        struct PreAllocatedBuffer
-        {
-            char *const buf;
-            int len;
-        };
-        ConstSlice(const ValidSlice &slice) : BufferPtrSlice(DuplicateBuffer(slice), slice.GetLen())
+        ConstSlice(GlobalBufferAllocator::Container &&buf_container, size_t len) : ConstSliceHelper(std::move(buf_container), len)
         {
         }
-        ConstSlice(PreAllocatedBuffer pre_allocated_buffer) : BufferPtrSlice(pre_allocated_buffer.buf, pre_allocated_buffer.len)
+        ConstSlice(const ValidSlice &slice) : ConstSliceHelper(DuplicateBuffer(slice), slice.GetLen())
         {
         }
-        static const char *const DuplicateBuffer(const ValidSlice &slice)
+        static GlobalBufferAllocator::Container DuplicateBuffer(const ValidSlice &slice)
         {
-            char *const new_buf = (char *)MemAllocator::alloc(slice.GetLen());
-            if (slice.CopyToBuffer(new_buf).IsError())
+            GlobalBufferAllocator::Container buf_container = GlobalBufferAllocator::Get()->Alloc(slice.GetLen());
+            if (slice.CopyToBuffer(buf_container.GetPtr<char>()).IsError())
             {
                 abort();
             }
-            return new_buf;
+            return buf_container;
         }
-        static const char *const DuplicateBuffer(const char *const buf, const int len)
+        static GlobalBufferAllocator::Container DuplicateBuffer(const char *const buf, const int len)
         {
-            char *const new_buf = (char *)MemAllocator::alloc(len);
-            memcpy(new_buf, buf, len);
-            return new_buf;
+            GlobalBufferAllocator::Container buf_container = GlobalBufferAllocator::Get()->Alloc(len);
+            memcpy(buf_container.GetPtr<char>(), buf, len);
+            return buf_container;
         }
     };
 

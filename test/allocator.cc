@@ -55,10 +55,10 @@ static void single_alloc_free()
 
     {
         LocalBufferAllocator::Container container1 = allocator->Alloc(32);
-        void *buf1 = container1.GetPtr();
+        void *buf1 = container1.GetPtr<void>();
         InitBuffer(buf1, 1, 32);
         LocalBufferAllocator::Container container2 = allocator->Alloc(64);
-        void *buf2 = container2.GetPtr();
+        void *buf2 = container2.GetPtr<void>();
         InitBuffer(buf2, 2, 64);
         CheckBuffer(buf1, 1, 32);
         CheckBuffer(buf2, 2, 64);
@@ -75,10 +75,10 @@ static void allocate_large_buffer()
 
     {
         LocalBufferAllocator::Container container1 = allocator->Alloc(4096);
-        void *buf1 = container1.GetPtr();
+        void *buf1 = container1.GetPtr<void>();
         InitBuffer(buf1, 1, 4096);
         LocalBufferAllocator::Container container2 = allocator->Alloc(4096);
-        void *buf2 = container2.GetPtr();
+        void *buf2 = container2.GetPtr<void>();
         InitBuffer(buf2, 2, 4096);
         CheckBuffer(buf1, 1, 4096);
         CheckBuffer(buf2, 2, 4096);
@@ -93,19 +93,44 @@ static void allocate_many_buffers()
     TestMemAllocator base_allocator;
     LocalBufferAllocator *allocator = LocalBufferAllocator::ResetWithBaseAllocator(base_allocator);
 
-    for(int i = 0; i < 1024; i++){
+    for (int i = 0; i < 1024; i++)
+    {
         LocalBufferAllocator::Container container1 = allocator->Alloc(64);
-        void *buf1 = container1.GetPtr();
-        InitBuffer(buf1, i % 0xFF, 4096);
+        void *buf1 = container1.GetPtr<void>();
+        InitBuffer(buf1, i % 0xFF, 64);
     }
 
     LocalBufferAllocator::ResetWithDefaultAllocator();
 }
 
-int main()
+static void move_buffer()
+{
+    START_TEST;
+    TestMemAllocator base_allocator;
+    GlobalBufferAllocator *allocator = GlobalBufferAllocator::ResetWithBaseAllocator(base_allocator);
+    {
+        GlobalBufferAllocator::Container container1 = allocator->Alloc(1024);
+        InitBuffer(container1.GetPtr<void>(), 1, 1024);
+        GlobalBufferAllocator::Container container2 = std::move(container1);
+        CheckBuffer(container2.GetPtr<void>(), 1, 1024);
+    }
+}
+
+void test_for_localallocator()
 {
     single_alloc_free();
     allocate_large_buffer();
     allocate_many_buffers();
+}
+
+void test_for_globalallocator()
+{
+    move_buffer();
+}
+
+int main()
+{
+    test_for_localallocator();
+    test_for_globalallocator();
     return 0;
 }
