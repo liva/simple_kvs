@@ -69,7 +69,7 @@ conf = {
     #"gdb": True,
     # "benchmark": True,
     #"force_test": True,
-    "skip_test": True,
+    #"skip_test": True,
 }
 
 if __name__ == "__main__":
